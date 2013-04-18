@@ -1,0 +1,84 @@
+.overflow-hidden
+{
+    overflow: hidden;
+}
+
+#tableLayout table.separate
+{
+    border-collapse: separate;
+}
+
+div.box-border
+{
+    border: 1px solid #D1D1D1;
+}
+
+#tableLayout
+{
+    margin: 15px auto 20px auto;
+    overflow: hidden;
+}
+
+    #tableLayout a
+    {
+        text-decoration: none;
+    }
+
+        #tableLayout a:hover
+        {
+            text-decoration: underline;
+        }
+
+    #tableLayout td, #tableLayout td *
+    {
+        white-space: nowrap;
+    }
+
+    #tableLayout td, #tableLayout th
+    {
+        border-right: 1px solid #D1D1D1;
+        border-bottom: 1px solid #D1D1D1;
+        padding: 3px 7px;
+        font-size: 11px;
+        font-family: Arial;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    #tableLayout th
+    {
+        text-align: center;
+    }
+
+        #tableLayout th > div
+        {
+            padding: 0px 10px;
+            cursor: pointer;
+            background-repeat: no-repeat;
+            background-position: right center;
+        }
+
+            #tableLayout th > div.desc
+            {
+                background-image: url(SortDescending.gif);
+            }
+
+            #tableLayout th > div.asc
+            {
+                background-image: url(SortAscending.gif);
+            }
+
+    #tableLayout thead
+    {
+        color: #1257C6;
+    }
+
+    #tableLayout thead
+    {
+        background-color: #f2f2f2;
+    }
+
+    #tableLayout td
+    {
+        empty-cells: show;
+    }
