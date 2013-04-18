@@ -1,0 +1,84 @@
+.overflow-hidden
+{
+    overflow: hidden;
+}
+
+#basicLayout table.separate
+{
+    border-collapse: separate;
+}
+
+#basicLayout table.collapse
+{
+    border-collapse: collapse;
+}
+
+div.box-border
+{
+    border: 1px solid #D1D1D1;
+}
+
+#basicLayout
+{
+    margin: 15px auto 20px auto;
+    overflow: hidden;
+}
+
+    #basicLayout a
+    {
+        text-decoration: none;
+    }
+
+        #basicLayout a:hover
+        {
+            text-decoration: underline;
+        }
+
+    #basicLayout td, #basicLayout td *
+    {
+        white-space: nowrap;
+    }
+
+    #basicLayout td, #basicLayout th
+    {
+        border: 1px solid #D1D1D1;
+        padding: 3px 7px;
+        font-size: 11px;
+        font-family: Arial;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    #basicLayout th
+    {
+        text-align: center;
+    }
+
+        #basicLayout th > div
+        {
+            padding: 0px 10px;
+            cursor: pointer;
+            background-repeat: no-repeat;
+            background-position: right center;
+        }
+
+            #basicLayout th > div.desc
+            {
+                background-image: url(SortDescending.gif);
+            }
+
+            #basicLayout th > div.asc
+            {
+                background-image: url(SortAscending.gif);
+            }
+
+    #basicLayout thead
+    {
+        color: #1257C6;
+        background-color: #CCC;
+    }
+
+    #basicLayout td
+    {
+        empty-cells: show;
+    }
