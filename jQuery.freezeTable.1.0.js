@@ -1,4 +1,4 @@
-// ref -- jQuery.
+﻿// ref -- jQuery.
 // freezeTable
 (function ($, undefined) {
 
@@ -173,7 +173,9 @@
             paging: {
                 enabled: true,
                 style: 'listing', //ps: listing / traditional
-                size: 100
+                size: 200,
+                total: undefined,
+                listingLoading: undefined
             },
 
             layout: {
@@ -264,7 +266,36 @@
         },
 
         init: function () {
-            var __this = this;
+            var __this = this
+            pagingIndex = 1;
+            var dataSource = { columns: this.dataSource.columns, rows: this.dataSource.rows };
+            if (this.paging.enabled) {
+                var start = pagingIndex - 1,
+                    end = this.paging.size;
+
+                dataSource.rows = this.dataSource.rows.slice(0, end);
+
+                // setup listingLoading handler
+                if (typeof (this.paging.listingLoading) !== 'function') {
+                    this.paging.listingLoading = function (index, size, total) {
+
+                        // add 10/9
+                        var s = Math.floor(Math.pow((10 / 9), (index - 2)) * size),
+                            e = Math.floor(Math.pow((10 / 9), (index - 1)) * size);
+
+                        if (e >= this.dataSource.rows.length) {
+                            return;
+                        }
+
+                        var source = this.dataSource.rows.slice(s, e);
+                        var fulltable = buildContentRows(source, this.columns.formatter);
+                        var columntable = buildContentRows(source, this.columns.formatter, this.columns.freezeCount);
+
+                        this.contentContainer.find('tbody:first').append(fulltable);
+                        this.freezeColumnContainer.find('tbody:first').append(columntable);
+                    }
+                }
+            }
 
             var freezedCount = this.columns.freezedCount,
                 i = 0;
@@ -279,7 +310,7 @@
                 .append(this.freezeColumnContainer);
 
             // 内容 -------------------------------------- start
-            this.contentContainer.html(randerFullTable(this.dataSource, this.header.formatter, this.columns.formatter, this.layout));
+            this.contentContainer.html(randerFullTable(dataSource, this.header.formatter, this.columns.formatter, this.layout));
             var contentTable = this.contentContainer.children('table');
             var contentTableHeaderCells = contentTable.find('th');
 
@@ -287,7 +318,11 @@
                 this.layout.height = contentTable.height() + 20;
             }
 
-            this.container.height(this.layout.height);
+            if (this.paging.enabled && this.paging.style == 'traditional') {
+                this.container.height(this.layout.height + 50);
+            } else {
+                this.container.height(this.layout.height);
+            }
 
             // after content is ready, init base size
             var freezeWidth = this.columns.defaultFreezedWidth;
@@ -317,11 +352,11 @@
                 .css('margin-left', -freezeColumnsWidth);
             // 内容 -------------------------------------- end
 
-            // 表头与列交叉 -------------------------------------- start  		
+            // 表头与列交叉 -------------------------------------- start			
             var cornerWidth = freezeWidth + freezeCornerContainerWidthOffset;
             this.freezeCornerContainer
                 .width(cornerWidth)
-                .html(randerFreezeCorner(this.dataSource, freezedCount, this.header.formatter, this.layout));
+                .html(randerFreezeCorner(dataSource, freezedCount, this.header.formatter, this.layout));
 
             this.freezeCornerContainer.find('table').css({ 'table-layout': 'fixed' });
 
@@ -333,7 +368,7 @@
             // 表头 -------------------------------------- start
             this.freezeHeaderContainer
                 .width(this.layout.width)
-                .html(randerFreezeHeader(this.dataSource, this.header.formatter, this.layout));
+                .html(randerFreezeHeader(dataSource, this.header.formatter, this.layout));
 
             var freezeHeaderTable = this.freezeHeaderContainer.children('table');
 
@@ -356,7 +391,7 @@
                 .height(this.layout.height - headerHeight + freezeColumnContainerHeightOffset)
                 .width(freezeWidth)
                 .css('margin-top', headerHeight)
-                .html(randerFreezeColumnTable(this.dataSource, freezedCount, this.header.formatter, this.columns.formatter, this.layout));
+                .html(randerFreezeColumnTable(dataSource, freezedCount, this.header.formatter, this.columns.formatter, this.layout));
 
             var freezeColumnTable = this.freezeColumnContainer.children('table');
 
@@ -550,6 +585,36 @@
                     .bind('click', onHeaderClick);
                 this.freezeHeaderContainer.unbind('click')
                     .bind('click', onHeaderClick);
+            }
+
+            if (this.paging.enabled) {
+                this.paging.total = this.paging.total || this.dataSource.rows.length;
+                var paging = this.paging;
+
+                switch (paging.style) {
+                    case 'listing':
+                        this.contentContainer.bind('scroll', function () {
+                            if (this.scrollHeight > 0) {
+                                var $this = $(this);
+                                var thisHeight = $this.height();
+                                var offsetlimit = Math.floor(thisHeight / 4);
+                                var topOffset = this.scrollHeight - $this.scrollTop() - thisHeight;
+                                if (!__this.isListingLoading && topOffset <= offsetlimit) {
+                                    __this.isListingLoading = true;
+
+                                    try {
+                                        paging.listingLoading.call(__this, ++pagingIndex, paging.size, paging.total);
+                                    } catch (ex) { /*ignore*/ }
+                                    __this.isListingLoading = false;
+                                }
+                            }
+                        });
+                        break;
+                    case 'traditional':
+                        var pager = $(buildPaging(1, paging.size, paging.total)).css('margin-top', this.layout.height + 10);
+                        this.container.append(pager);
+                        break;
+                }
             }
         },
 
@@ -1037,6 +1102,117 @@
         tableHtml[tableHtml.length] = '</table>';
 
         return tableHtml.join('');
+    }
+
+    function buildHeaderRows(dataSource, formatter) {
+        var i = 0,
+            columns = dataSource || [],
+            count = dataSource.length;
+
+        if (!$.isFunction(formatter)) {
+            formatter = function (d) {
+                var val = '&nbsp;';
+                if (typeof d === 'object') {
+                    if (d.displayValue != '') {
+                        val = d.displayValue;
+                    }
+                } else if (d != '') {
+                    val = d;
+                }
+
+                return val;
+            };
+        }
+
+        // build header
+        var trHtml = ['<tr>'];
+        for (i = 0; i < count; i++) {
+            trHtml[trHtml.length] = '<th data-sequence="' + i + '">' + formatter(columns[i]) + '</th>';
+        }
+        trHtml[trHtml.length] = '</tr>';
+
+        return trHtml.join('');
+    }
+
+    function buildContentRows(dataSource, formatter, columnsCount) {
+        var rows = dataSource || [],
+            i = 0,
+            j = 0,
+            html = [],
+            rowsCount = dataSource.length;
+
+        if (rows.length > 0) {
+            columnsCount = columnsCount || rows[0].length;
+            columnsCount = Math.min(columnsCount, rows[0].length);
+        } else {
+            columnsCount = 0;
+        }
+
+        if (!$.isFunction(formatter)) {
+            formatter = function (d) {
+                var val = '&nbsp;';
+                if (typeof d === 'object') {
+                    if (d.displayValue != '') {
+                        val = d.displayValue;
+                    }
+                    if (d.hyperlink && d.hyperlink != '') {
+                        val = '<a href="' + d.hyperlink + '">' + val + '</a>';
+                    }
+                } else if (d != '') {
+                    val = d;
+                }
+
+                return val;
+            };
+        }
+
+        // build rows
+        for (i = 0; i < rowsCount; i++) {
+            var trHtml = ['<tr>'];
+            var row = rows[i];
+            for (j = 0; j < columnsCount; j++) {
+                trHtml[trHtml.length] = '<td>' + formatter(row[j]) + '</td>';
+            }
+            trHtml[trHtml.length] = '</tr>';
+            html[html.length] = trHtml.join('');
+        }
+
+        return html.join('');
+    }
+
+    function buildPaging(index, size, total, styleClasses) {
+        styleClasses = styleClasses || 'ks-pagination-links';
+
+        var showSize = 7,
+            pagecount = Math.ceil(total / size);
+        html = ['<div class="' + styleClasses + '"><ul>'];
+
+        var times = Math.ceil(index / showSize),
+            i = (times - 1) * showSize + 1,
+            end = times * showSize;
+
+        if (times > 1) {
+            html[html.length] = '<li class="previous"><a href="#page-previous">&lt; Previous</a></li>';
+        }
+
+        for (; i <= end; i++) {
+            if (i != index) {
+                html[html.length] = '<li><a href="#page-' + i + '">' + i + '</a></li>';
+            }
+            else {
+                html[html.length] = '<li class="current">' + i + '</li>';
+            }
+        }
+
+        if (times * showSize < pagecount) {
+            html[html.length] = '<li class="next"><a href="#page-next">Next &gt;</a></li>';
+        }
+
+        html[html.length] = '</ul>';
+        html[html.length] = ' <span class="total">(' + total + '&nbsp;results)</span>';
+        html[html.length] = '</div>';
+
+        return html.join('');
     }
 
     // build table ------------------------------ END
