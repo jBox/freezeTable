@@ -253,7 +253,7 @@
             }
 
             var tableOption = {
-                tableClass: this.tableClass,
+                tableClass: this.layout.tableClass,
                 theadClass: this.layout.theadClass,
                 tbodyClass: this.layout.tbodyClass,
                 width:this.layout.width,
@@ -308,6 +308,11 @@
 
             fulltable.table.css('margin-top', -headerHeight)
                 .css('margin-left', -freezeColumnsWidth);
+
+            var headertable = new HeaderTable(tableOption);
+            headertable.rander(dataSource.columns, this.header.formatter, this.columns.formatter, columnWidthList);
+            this.tables.push(headertable);
+            this.container.append(headertable.container);
         },
 
         init: function () {
