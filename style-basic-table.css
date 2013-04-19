@@ -64,12 +64,12 @@ div.box-border
 
             #basicLayout th > div.desc
             {
-                background-image: url(SortDescending.gif);
+                background-image: url(images/SortDescending.gif);
             }
 
             #basicLayout th > div.asc
             {
-                background-image: url(SortAscending.gif);
+                background-image: url(images/SortAscending.gif);
             }
 
     #basicLayout thead

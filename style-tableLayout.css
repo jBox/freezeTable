@@ -60,12 +60,12 @@ div.box-border
 
             #tableLayout th > div.desc
             {
-                background-image: url(SortDescending.gif);
+                background-image: url(images/SortDescending.gif);
             }
 
             #tableLayout th > div.asc
             {
-                background-image: url(SortAscending.gif);
+                background-image: url(images/SortAscending.gif);
             }
 
     #tableLayout thead

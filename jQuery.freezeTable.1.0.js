@@ -6,8 +6,8 @@
         freezeColumnContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 2;"></div>',
         freezeHeaderContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 1;"></div>',
         contentContainerTemplate = '<div style="background-color: white; position: absolute; z-index: 0; overflow: auto;"></div>',
-        leftHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9; border-right: 2px solid #bdbdbd; -webkit-box-shadow: 5px 0 5px #DDD; box-shadow: 5px 0 5px #DDD;"><img src="Icon_Left.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
-        rightHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9;"><img src="Icon_Right.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
+        leftHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9; border-right: 2px solid #bdbdbd; -webkit-box-shadow: 5px 0 5px #DDD; box-shadow: 5px 0 5px #DDD;"><img src="images/Icon_Left.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
+        rightHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9;"><img src="images/Icon_Right.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
         resizeBarTemplate = '<div class="freeze-column-resize-bar" style="border-left: 0px dashed #bdbdbd; width: 5px; cursor: col-resize; position: absolute; z-index: 10;"></div>',
         tooltipTemplate = '<div style="background-color: #dfe0e4; position: absolute; z-index: 999; border: 1px solid #f90; white-space: nowrap; padding: 3px 5px; display: none; font-size: 11px;"></div>';
 
