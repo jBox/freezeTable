@@ -89,8 +89,6 @@
     // Tooltip ------------------------------- GO
 
     function Tooltip(template) {
-        this.htmlLabel = true;
-        this.attachMouse = true;
         this.isVisible = false;
         this.mousemover = new Mousemover();
 
@@ -105,10 +103,10 @@
 
     Tooltip.prototype = {
         constructor: Tooltip,
-        show: function (message) {
+        show: function (message, htmlLabel) {
             message = message.trim();
             if (typeof message === 'string' && message != '') {
-                if (this.htmlLabel) {
+                if (htmlLabel) {
                     this.layout.html(message);
                 } else {
                     this.layout.text(message);
@@ -156,11 +154,8 @@
                 resizable: true,
                 formatter: undefined,
                 click: undefined,
-                mouseover: undefined,
-                mouseleave: undefined,
                 tooltip: {
                     enabled: true,
-                    attachMouse: true,
                     htmlLabel: true,
                     formatter: undefined
                 }
@@ -173,7 +168,7 @@
             paging: {
                 enabled: true,
                 style: 'listing', //ps: listing / traditional
-                size: 200,
+                size: 500,
                 total: undefined,
                 listingLoading: undefined
             },
@@ -266,8 +261,7 @@
         },
 
         init: function () {
-            var __this = this
-            pagingIndex = 1;
+            var pagingIndex = 1;
             var dataSource = { columns: this.dataSource.columns, rows: this.dataSource.rows };
             if (this.paging.enabled) {
                 var start = pagingIndex - 1,
@@ -283,7 +277,7 @@
                         var s = Math.floor(Math.pow((10 / 9), (index - 2)) * size),
                             e = Math.floor(Math.pow((10 / 9), (index - 1)) * size);
 
-                        if (e >= this.dataSource.rows.length) {
+                        if (e >= total) {
                             return;
                         }
 
@@ -405,217 +399,226 @@
             freezeColumnTable.css({ 'margin-top': -headerHeight, 'table-layout': 'fixed', 'width': freezeWidth - freezeColumnContainerWidthOffset });
             // 列 -------------------------------------- end
 
-            var freezeInnter = {
-                container: this.container,
-                contentContainer: this.contentContainer,
-                freezeHeaderContainer: this.freezeHeaderContainer,
-                freezeColumnContainer: this.freezeColumnContainer,
-                isLeftBarVisiable: false,
-                isRightBarVisiable: false
-            };
+            // setup events bind.
+            (function (table) {
+                var freezeInnter = {
+                    isLeftBarVisiable: false,
+                    isRightBarVisiable: false
+                };
+                var contentTableHeaderCells = table.contentContainer.find('th');
+                // horizontal - enhanced
+                if (table.horizontalEnhanced) {
 
-            // horizontal - enhanced
-            if (this.horizontalEnhanced) {
+                    var baseHeaderColumnOffset = $(contentTableHeaderCells[1]).offset().left;
 
-                var baseHeaderColumnOffset = $(contentTableHeaderCells[1]).offset().left;
+                    table.leftHorizontalScrollBar = $(leftHorizontalScrollBarTemplate)
+                        .css({ 'margin-left': freezeWidth + leftHorizontalScrollBarMarginOffset, 'height': table.layout.height });
+                    table.rightHorizontalScrollBar = $(rightHorizontalScrollBarTemplate)
+                        .css({ 'margin-left': table.layout.width, 'height': table.layout.height });
+                    table.container.append(table.leftHorizontalScrollBar);
+                    table.container.append(table.rightHorizontalScrollBar);
 
-                this.leftHorizontalScrollBar = $(leftHorizontalScrollBarTemplate).css({ 'margin-left': freezeWidth + leftHorizontalScrollBarMarginOffset, 'height': this.layout.height });
-                this.rightHorizontalScrollBar = $(rightHorizontalScrollBarTemplate).css({ 'margin-left': this.layout.width, 'height': this.layout.height });
-                this.container.append(this.leftHorizontalScrollBar);
-                this.container.append(this.rightHorizontalScrollBar);
-                freezeInnter.leftHorizontalScrollBar = this.leftHorizontalScrollBar;
-                freezeInnter.rightHorizontalScrollBar = this.rightHorizontalScrollBar;
-                freezeInnter.isLeftBarVisiable = false;
-                freezeInnter.isRightBarVisiable = false;
+                    freezeInnter.isLeftBarVisiable = false;
+                    freezeInnter.isRightBarVisiable = false;
 
-                this.leftHorizontalScrollBar
-                    .unbind('mouseover')
-                    .unbind('mouseout')
-                    .bind('mouseover', function (event) {
-                        freezeInnter.isLeftBarVisiable = true;
-                        $(this).children('img').show();
-                        return false;
-                    })
-                    .bind('mouseout', function () {
-                        $(this).children('img').hide();
-                        freezeInnter.isLeftBarVisiable = false;
-                        return false;
-                    })
-                    .children('img').bind('click', function () {
-                        var offset = baseHeaderColumnOffset;
-                        contentTableHeaderCells.each(function (index) {
-                            var os = $(this).offset().left;
-                            if (os < baseHeaderColumnOffset) {
-                                offset = os;
-                            }
+                    table.leftHorizontalScrollBar
+                        .unbind('mouseover')
+                        .unbind('mouseout')
+                        .bind('mouseover', function (event) {
+                            freezeInnter.isLeftBarVisiable = true;
+                            $(this).children('img').show();
+                            return false;
+                        })
+                        .bind('mouseout', function () {
+                            $(this).children('img').hide();
+                            freezeInnter.isLeftBarVisiable = false;
+                            return false;
+                        })
+                        .children('img').bind('click', function () {
+                            var offset = baseHeaderColumnOffset;
+                            contentTableHeaderCells.each(function (index) {
+                                var os = $(this).offset().left;
+                                if (os < baseHeaderColumnOffset) {
+                                    offset = os;
+                                }
+                            });
+
+                            var scrollOffset = baseHeaderColumnOffset - offset;
+                            table.contentContainer.animate({ scrollLeft: '-=' + scrollOffset }, 300);
                         });
 
-                        var scrollOffset = baseHeaderColumnOffset - offset;
-                        freezeInnter.contentContainer.animate({ scrollLeft: '-=' + scrollOffset }, 300);
-                    });
+                    table.rightHorizontalScrollBar
+                        .unbind('mouseover')
+                        .unbind('mouseout')
+                        .bind('mouseover', function (event) {
+                            freezeInnter.isRightBarVisiable = true;
+                            $(this).children('img').show();
+                            return false;
+                        })
+                        .bind('mouseout', function () {
+                            $(this).children('img').hide();
+                            freezeInnter.isRightBarVisiable = false;
+                            return false;
+                        })
+                        .children('img').bind('click', function () {
+                            var offset = baseHeaderColumnOffset;
+                            contentTableHeaderCells.each(function (index) {
+                                var os = $(this).offset().left;
+                                if (offset == baseHeaderColumnOffset && os > baseHeaderColumnOffset) {
+                                    offset = os;
+                                }
+                            });
 
-                this.rightHorizontalScrollBar
-                    .unbind('mouseover')
-                    .unbind('mouseout')
-                    .bind('mouseover', function (event) {
-                        freezeInnter.isRightBarVisiable = true;
-                        $(this).children('img').show();
-                        return false;
-                    })
-                    .bind('mouseout', function () {
-                        $(this).children('img').hide();
-                        freezeInnter.isRightBarVisiable = false;
-                        return false;
-                    })
-                    .children('img').bind('click', function () {
-                        var offset = baseHeaderColumnOffset;
-                        contentTableHeaderCells.each(function (index) {
-                            var os = $(this).offset().left;
-                            if (offset == baseHeaderColumnOffset && os > baseHeaderColumnOffset) {
-                                offset = os;
-                            }
+                            var scrollOffset = offset - baseHeaderColumnOffset;
+                            table.contentContainer.animate({ scrollLeft: '+=' + scrollOffset }, 300);
                         });
 
-                        var scrollOffset = offset - baseHeaderColumnOffset;
-                        freezeInnter.contentContainer.animate({ scrollLeft: '+=' + scrollOffset }, 300);
-                    });
-
-                (function (inner, table) {
                     table.mousemover.bind('horizontal-enhanced-mousemove', function (event, pos) {
-                        if (inner.isLeftBarVisiable) {
-                            var leftOffset = inner.leftHorizontalScrollBar.position().top;
-                            inner.leftHorizontalScrollBar.children('img').css('margin-top', pos.y - leftOffset + imageMarginMouseOffset);
+                        if (freezeInnter.isLeftBarVisiable) {
+                            var leftOffset = table.leftHorizontalScrollBar.position().top;
+                            table.leftHorizontalScrollBar.children('img').css('margin-top', pos.y - leftOffset + imageMarginMouseOffset);
                         }
 
-                        if (inner.isRightBarVisiable) {
-                            var rightOffset = inner.rightHorizontalScrollBar.position().top;
-                            inner.rightHorizontalScrollBar.children('img').css('margin-top', pos.y - rightOffset + imageMarginMouseOffset);
+                        if (freezeInnter.isRightBarVisiable) {
+                            var rightOffset = table.rightHorizontalScrollBar.position().top;
+                            table.rightHorizontalScrollBar.children('img').css('margin-top', pos.y - rightOffset + imageMarginMouseOffset);
                         }
                     });
-                })(freezeInnter, this);
-            }
+                }
 
-            // resize bind
-            if (this.columns.resizable) {
-                var bar = $(resizeBarTemplate).css({ 'margin-left': freezeWidth + resizeBarWidthOffset, 'height': this.layout.height });
-                this.container.append(bar);
-                this.resizeBar = new ResizeBar(bar);
-                this.resizeBar.freezeWidth = freezeWidth;
-                this.resizeBar.freezeMinWidth = this.columns.defaultFreezedWidth;
-                this.resizeBar.freezeMaxWidth = this.layout.width - 160;
+                // resize bind
+                if (table.columns.resizable) {
+                    var bar = $(resizeBarTemplate).css({ 'margin-left': freezeWidth + resizeBarWidthOffset, 'height': table.layout.height });
+                    table.container.append(bar);
+                    table.resizeBar = new ResizeBar(bar);
+                    table.resizeBar.freezeWidth = freezeWidth;
+                    table.resizeBar.freezeMinWidth = table.columns.defaultFreezedWidth;
+                    table.resizeBar.freezeMaxWidth = table.layout.width - 160;
 
-                this.resizeBar.bind('begin', function () {
-                    __this.leftHorizontalScrollBar.hide();
-                });
-                this.resizeBar.bind('complate', function (width) {
-                    __this.resize(width);
-                });
-            }
+                    table.resizeBar.bind('begin', function () {
+                        table.leftHorizontalScrollBar.hide();
+                    });
+                    table.resizeBar.bind('complate', function (width) {
+                        table.resize(width);
+                    });
+                }
 
-            // bind scroll event.
-            this.contentContainer
-                .unbind('scroll')
-                .bind('scroll', function () {
-                    var scrollLeft = freezeInnter.contentContainer.scrollLeft(),
-                        scrollTop = freezeInnter.contentContainer.scrollTop(),
-                        width = __this.resizeBar.freezeWidth || freezeWidth;
+                // bind scroll event.
+                table.contentContainer
+                    .unbind('scroll')
+                    .bind('scroll', function () {
+                        var scrollLeft = table.contentContainer.scrollLeft(),
+                            scrollTop = table.contentContainer.scrollTop(),
+                            width = table.resizeBar.freezeWidth || freezeWidth;
 
-                    freezeInnter.freezeHeaderContainer.scrollLeft(scrollLeft);
-                    freezeInnter.freezeColumnContainer.scrollTop(scrollTop);
+                        table.freezeHeaderContainer.scrollLeft(scrollLeft);
+                        table.freezeColumnContainer.scrollTop(scrollTop);
 
-                    if (scrollLeft > freezeInnter.freezeHeaderContainer.scrollLeft()) {
-                        var vl = scrollLeft - freezeInnter.freezeHeaderContainer.scrollLeft();
-                        freezeInnter.freezeHeaderContainer.css('margin-left', width - vl);
-                    } else {
-                        freezeInnter.freezeHeaderContainer.css('margin-left', width);
-                    }
-
-                    if (scrollTop > freezeInnter.freezeColumnContainer.scrollTop()) {
-                        var vt = scrollTop - freezeInnter.freezeColumnContainer.scrollTop();
-                        freezeInnter.freezeColumnContainer.css('margin-top', headerHeight - vt);
-                    } else {
-                        freezeInnter.freezeColumnContainer.css('margin-top', headerHeight);
-                    }
-                });
-
-            // bind mouseover & mouseleave event.
-            this.freezeColumnContainer
-                .unbind('mouseover')
-                .unbind('mouseleave')
-                .bind('mouseover', function (event) {
-                    if (event.target.nodeName == 'TD') {
-                        tooltip.show($(event.target).text());
-                    }
-                    return false;
-                })
-                .bind('mouseleave', function (event) {
-                    tooltip.hide();
-                    return false;
-                });
-
-            var onHeaderClick = function (event) {
-                try {
-                    // find data-sequence
-                    var $th = $(event.target);
-                    if (event.target.nodeName != 'TH') {
-                        var _th = $th.parents('th:first');
-                        if (_th.length != 0) {
-                            $th = _th;
+                        if (scrollLeft > table.freezeHeaderContainer.scrollLeft()) {
+                            var vl = scrollLeft - table.freezeHeaderContainer.scrollLeft();
+                            table.freezeHeaderContainer.css('margin-left', width - vl);
                         } else {
-                            _th = $th.find('th:first');
+                            table.freezeHeaderContainer.css('margin-left', width);
+                        }
+
+                        if (scrollTop > table.freezeColumnContainer.scrollTop()) {
+                            var vt = scrollTop - table.freezeColumnContainer.scrollTop();
+                            table.freezeColumnContainer.css('margin-top', headerHeight - vt);
+                        } else {
+                            table.freezeColumnContainer.css('margin-top', headerHeight);
+                        }
+                    });
+
+                // bind mouseover & mouseleave event.
+                table.freezeColumnContainer
+                    .unbind('mouseover')
+                    .unbind('mouseleave')
+                    .bind('mouseover', function (event) {
+                        if (table.columns.tooltip.enabled) {
+                            if (event.target.nodeName == 'TD') {
+
+                                if (typeof table.columns.tooltip.formatter !== 'function') {
+                                    table.columns.tooltip.formatter = function (target) {
+                                        return $(target).text();
+                                    };
+                                }
+
+                                tooltip.show(table.columns.tooltip.formatter(event.target), table.columns.tooltip.htmlLabel);
+                            }
+                            return false;
+                        }
+                        return true;
+                    })
+                    .bind('mouseleave', function (event) {
+                        if (table.columns.tooltip.enabled) {
+                            tooltip.hide();
+                            return false;
+                        }
+                        return true;
+                    });
+
+                function headerClickHandler(event) {
+                    try {
+                        // find data-sequence
+                        var $th = $(event.target);
+                        if (event.target.nodeName != 'TH') {
+                            var _th = $th.parents('th:first');
                             if (_th.length != 0) {
                                 $th = _th;
                             } else {
-                                // not found
-                                return false;
-                            }
-                        }
-                    }
-
-                    var index = parseInt($th.attr('data-sequence'));
-                    __this.header.click.call(__this, __this.dataSource.columns[index]);
-
-                    return false;
-                } catch (ex) {
-                }
-            };
-
-            if (this.header.click) {
-                this.freezeCornerContainer.unbind('click')
-                    .bind('click', onHeaderClick);
-                this.freezeHeaderContainer.unbind('click')
-                    .bind('click', onHeaderClick);
-            }
-
-            if (this.paging.enabled) {
-                this.paging.total = this.paging.total || this.dataSource.rows.length;
-                var paging = this.paging;
-
-                switch (paging.style) {
-                    case 'listing':
-                        this.contentContainer.bind('scroll', function () {
-                            if (this.scrollHeight > 0) {
-                                var $this = $(this);
-                                var thisHeight = $this.height();
-                                var offsetlimit = Math.floor(thisHeight / 4);
-                                var topOffset = this.scrollHeight - $this.scrollTop() - thisHeight;
-                                if (!__this.isListingLoading && topOffset <= offsetlimit) {
-                                    __this.isListingLoading = true;
-
-                                    try {
-                                        paging.listingLoading.call(__this, ++pagingIndex, paging.size, paging.total);
-                                    } catch (ex) { /*ignore*/ }
-                                    __this.isListingLoading = false;
+                                _th = $th.find('th:first');
+                                if (_th.length != 0) {
+                                    $th = _th;
+                                } else {
+                                    // not found
+                                    return false;
                                 }
                             }
-                        });
-                        break;
-                    case 'traditional':
-                        var pager = $(buildPaging(1, paging.size, paging.total)).css('margin-top', this.layout.height + 10);
-                        this.container.append(pager);
-                        break;
+                        }
+                        var index = parseInt($th.attr('data-sequence'));
+                        table.header.click.call(table, table.dataSource.columns[index]);
+                    } catch (ex) { /*ignore.*/ }
+
+                    return false;
                 }
-            }
+
+                if (table.header.click) {
+                    table.freezeCornerContainer.unbind('click')
+                        .bind('click', headerClickHandler);
+                    table.freezeHeaderContainer.unbind('click')
+                        .bind('click', headerClickHandler);
+                }
+
+                if (table.paging.enabled) {
+                    table.paging.total = table.paging.total || table.dataSource.rows.length;
+                    var paging = table.paging;
+
+                    switch (paging.style) {
+                        case 'listing':
+                            table.contentContainer.bind('scroll', function () {
+                                if (this.scrollHeight > 0) {
+                                    var $this = $(this);
+                                    var thisHeight = $this.height();
+                                    var offsetlimit = Math.floor(thisHeight / 4);
+                                    var topOffset = this.scrollHeight - $this.scrollTop() - thisHeight;
+                                    if (!table.isListingLoading && topOffset <= offsetlimit) {
+                                        table.isListingLoading = true;
+
+                                        try {
+                                            paging.listingLoading.call(table, ++pagingIndex, paging.size, paging.total);
+                                        } catch (ex) { /*ignore*/ }
+                                        table.isListingLoading = false;
+                                    }
+                                }
+                            });
+                            break;
+                        case 'traditional':
+                            var pager = $(buildPaging(1, paging.size, paging.total)).css('margin-top', table.layout.height + 10);
+                            table.container.append(pager);
+                            break;
+                    }
+                }
+            })(this);
         },
 
         redraw: function (dataSource) {

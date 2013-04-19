@@ -8,7 +8,7 @@
 <body>
     <div>
         <div id="tableLayout">
-        </div>        
+        </div>
         <div style="margin: 50px auto;">
             <h1>basic table</h1>
             <div id="basicLayout" style="margin: 50px auto;">
@@ -22,6 +22,38 @@
     <script src="js.js"></script>
     <script>
         var basicFreezeTable = $('#basicLayout').freezeTable({
+            columns: {
+                tooltip: { enabled: false }
+            },
+            header: {
+                freezed: true,
+                formatter: function (item) {
+                    var name = item.displayValue;
+                    var sortby = item.sortby;
+                    if (sortby && sortby != '') {
+                        return '<div class="' + sortby + '">' + name + '</div>';
+                    } else {
+                        return '<div>' + name + '</div>';
+                    }
+                },
+                click: function (item) {
+                    var source = basicFreezeTable.dataSource;
+                    for (var i = 0; i < source.columns.length; i++) {
+                        if (item == source.columns[i]) {
+                            if (item.sortby == 'asc') {
+                                item.sortby = 'desc';
+                            } else {
+                                item.sortby = 'asc';
+                            }
+                        } else {
+                            source.columns[i].sortby = '';
+                        }
+                    }
+                    var scrollleft = basicFreezeTable.contentContainer.scrollLeft();
+                    basicFreezeTable.redraw(source);
+                    basicFreezeTable.contentContainer.scrollLeft(scrollleft);
+                }
+            },
             dataSource: {
                 columns: [{ displayValue: "Name", sortby: 'asc' }, { displayValue: "Market Segment" }, { displayValue: "LT Rating" }, { displayValue: "Indicator" }, { displayValue: "Rating Type" }, { displayValue: "Rating Date" }, { displayValue: "Last Rating Action" }, { displayValue: "Outlook" }, { displayValue: "LT Watch" }, { displayValue: "Location" }, { displayValue: "BFSR" }, { displayValue: "BFSR Date" }, { displayValue: "STMR" }, { displayValue: "STMR Date" }, { displayValue: "STMR Type" }],
                 rows: [[{ displayValue: "Antioch Public Financing Authority, CA", hyperlink: "google.com" }, { displayValue: "U.S. Public Finance" }, { displayValue: "" }, { displayValue: "FALSE" }, { displayValue: "" }, { displayValue: "" }, { displayValue: "" }, { displayValue: "NOO" }, { displayValue: "Not on Watch" }, { displayValue: "CA" }, { displayValue: "" }, { displayValue: "" }, { displayValue: "" }, { displayValue: "" }, { displayValue: "" }],
