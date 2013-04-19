@@ -5,6 +5,7 @@
     var freezeCornerContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 3;"></div>',
         freezeColumnContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 2;"></div>',
         freezeHeaderContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 1;"></div>',
+        freezeFullContainerTemplate = '<div style="background-color: white; position: absolute; z-index: 0; overflow: auto;"></div>',
         contentContainerTemplate = '<div style="background-color: white; position: absolute; z-index: 0; overflow: auto;"></div>',
         leftHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9; border-right: 2px solid #bdbdbd; -webkit-box-shadow: 5px 0 5px #DDD; box-shadow: 5px 0 5px #DDD;"><img src="images/Icon_Left.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
         rightHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9;"><img src="images/Icon_Right.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
@@ -205,59 +206,108 @@
         tooltip = new Tooltip(this.tooltipTemplate || tooltipTemplate);
         this.mousemover = new Mousemover();
 
-        this.init();
+        this.newInit();
     }
 
     FreezeTable.prototype = {
         constructor: FreezeTable,
 
-        newInit: function () {
-
-            var __this = this;
-
+        newInit:function(){
+            this.tables = [];
             var freezedCount = this.columns.freezedCount,
-                i = 0;
+               i = 0;
 
             // setup table
             this.container
                 .width(this.layout.width)
                 .css('overflow', 'hidden');
 
-            var buildOption = {
-                connainerTemplate: contentContainerTemplate,
-                type: 'full', // ps: full / header / corner / column
-                headerContentFormatter: this.header.formatter,
-                columnsContentFormatter: this.columns.formatter,
-                freezeColumns: this.columns.freezedCount,
-                layout: this.layout,
-                paging: this.paging,
-                dataSource: this.dataSource
+            var pagingIndex = 1;
+            var dataSource = { columns: this.dataSource.columns, rows: this.dataSource.rows };
+            if (this.paging.enabled) {
+                var start = pagingIndex - 1,
+                    end = this.paging.size;
+
+                dataSource.rows = this.dataSource.rows.slice(0, end);
+                // setup listingLoading handler
+                if (typeof (this.paging.listingLoading) !== 'function') {
+                    this.paging.listingLoading = function (index, size, total) {
+
+                        // add 10/9
+                        var s = Math.floor(Math.pow((10 / 9), (index - 2)) * size),
+                            e = Math.floor(Math.pow((10 / 9), (index - 1)) * size);
+
+                        if (e >= total) {
+                            return;
+                        }
+
+                        var source = this.dataSource.rows.slice(s, e);
+                        var fulltable = buildContentRows(source, this.columns.formatter);
+                        var columntable = buildContentRows(source, this.columns.formatter, this.columns.freezeCount);
+
+                        this.tables[0].find('tbody:first').append(fulltable);
+                        // ??
+                        // this.tables[3].find('tbody:first').append(columntable);
+                    }
+                }
+            }
+
+            var tableOption = {
+                tableClass: this.tableClass,
+                theadClass: this.layout.theadClass,
+                tbodyClass: this.layout.tbodyClass,
+                width:this.layout.width,
+                height :this.layout.height
             };
 
-            var contentTable = new TableWrapper(buildOption);
-            this.tables.push(contentTable);
-            this.container.html(contentTable.container);
+            var fulltable = new FullTable(tableOption);
+            fulltable.rander(dataSource, this.header.formatter, this.columns.formatter);
+            this.tables.push(fulltable);
+            this.container.html(fulltable.container);
 
+            var headerCells = fulltable.find('th');
+            var columnWidthList = [],
+                showWidth = 0;
+            headerCells.each(function (index) {
+                var width = $(this).width();
+                if (index != 0) {
+                    showWidth += width;
+                }
 
-            buildOption.connainerTemplate = freezeCornerContainerTemplate;
-            buildOption.type = 'corner';
-            var cornerTable = new TableWrapper(buildOption);
-            this.tables.push(cornerTable);
-            this.container.append(cornerTable.container);
+                columnWidthList[columnWidthList.length] = width;
+            });
 
+            // after content is ready, init base size
+            var freezeWidth = this.columns.defaultFreezedWidth;
+            var tableHeight = fulltable.table.height() + tableHeaderHeightOffset;
+            var tableWidth = fulltable.table.width();
 
-            buildOption.connainerTemplate = freezeHeaderContainerTemplate;
-            buildOption.type = 'header';
-            var headerTable = new TableWrapper(buildOption);
-            this.tables.push(headerTable);
-            this.container.append(headerTable.container);
+            if (!this.header.freezed) {
+                this.layout.height = contentTable.height() + 20;
+            }
 
+            if (this.paging.enabled && this.paging.style == 'traditional') {
+                this.container.height(this.layout.height + 50);
+            } else {
+                this.container.height(this.layout.height);
+            }
 
-            buildOption.connainerTemplate = freezeColumnContainerTemplate;
-            buildOption.type = 'column';
-            var columnTable = new TableWrapper(buildOption);
-            this.tables.push(columnTable);
-            this.container.append(columnTable.container);
+            if (showWidth < this.layout.width - freezeWidth) {
+                tableWidth = Math.floor(tableWidth * (this.layout.width - freezeWidth) / showWidth);
+                fulltable.table.width(tableWidth);
+            }
+
+            var headerHeight = headerCells.height() + tableHeaderHeightOffset;
+            var freezeColumnsWidth = headerCells.first().width() + freezeColumnsWidthOffset;
+
+            fulltable.container
+                .css('margin-top', headerHeight)
+                .css('margin-left', freezeWidth)
+                .width(this.layout.width - freezeWidth)
+                .height(this.layout.height - headerHeight);
+
+            fulltable.table.css('margin-top', -headerHeight)
+                .css('margin-left', -freezeColumnsWidth);
         },
 
         init: function () {
@@ -613,7 +663,7 @@
                             });
                             break;
                         case 'traditional':
-                            var pager = $(buildPaging(1, paging.size, paging.total)).css('margin-top', table.layout.height + 10);
+                            var pager = $(buildPager(1, paging.size, paging.total)).css('margin-top', table.layout.height + 10);
                             table.container.append(pager);
                             break;
                     }
@@ -655,259 +705,130 @@
     };
     // FreezeTable ------------------------------- END
 
-    // TableWrapper ------------------------------- GO
-    function TableWrapper(option) {
-
+    // tables
+    function TableBase(option) {
         // default option for freeze table.
-        var extOption = extend({
-            connainerTemplate: null,
-            type: 'full', // ps: full / header / corner / column
-            headerContentFormatter: null,
-            columnsContentFormatter: null,
-            freezeColumns: 1,
-            layout: {
-                tableClass: 'separate content-table',
-                theadClass: 'table-thead',
-                tbodyClass: 'table-tbody',
-
-                width: 1024,
-                height: 600
-            },
-            paging: {
-                enabled: true,
-                style: 'listing', //ps: listing / traditional
-                size: 100
-            },
-            // 最小定义的数据集
-            dataSource: {
-                columns: [],
-                rows: []
-            }
-        }, option);
-
-        this.connainer = $(option.connainerTemplate);
-        this.type = extOption.type;
-        this.dataSource = extOption.dataSource;
-        this.paging = extOption.paging;
-        this.columnsContentFormatter = extOption.columnsContentFormatter;
-        this.freezeColumns = extOption.freezeColumns;
+        this.type = option.type || 'full'; // ps: full / header / corner / column
+        this.tableClass = option.tableClass || '';
+        this.theadClass = option.theadClass || '';
+        this.tbodyClass = option.tbodyClass || '';
+        this.width = option.width || 1024
+        this.height = option.height || 600;
+        this.container = $(option.connainerTemplate);
         this.table = null;
-
-        (function (tWrapper, buildOption) {
-
-            var rowsCount = tWrapper.dataSource.rows.length,
-                tableHtml = '';
-
-            if (buildOption.paging.enabled) {
-                rowsCount = Math.min(buildOption.paging.size, rowsCount);
-            }
-            // init table
-            switch (buildOption.type) {
-                case 'full':
-                    tableHtml = randerFullTable(tWrapper.dataSource, rowsCount, tWrapper.headerContentFormatter, tWrapper.columnsContentFormatter, tWrapper.layout);
-                    break;
-                case 'column':
-                    tableHtml = randerFreezeColumnTable(tWrapper.dataSource, rowsCount, tWrapper.freezeColumns, tWrapper.headerContentFormatter, tWrapper.columnsContentFormatter, tWrapper.layout);
-                    break;
-                case 'corner':
-                    tableHtml = randerFreezeCornerTable(tWrapper.dataSource, tWrapper.freezeColumns, tWrapper.headerContentFormatter, tWrapper.columnsContentFormatter, tWrapper.layout);
-                    break;
-                case 'header':
-                    tableHtml = randerFreezeHeaderTable(tWrapper.dataSource, tWrapper.headerContentFormatter, tWrapper.columnsContentFormatter, tWrapper.layout);
-                    break;
-            }
-            tWrapper.connainer.html(tableHtml);
-            tWrapper.table = tWrapper.container.children('table');
-            var headerCells = tWrapper.table.find('th');
-
-            function extendStyles(styles) {
-                return extend({ tableClass: '', theadClass: '', tbodyClass: '' }, styles);
-            }
-
-            function randerFreezeCornerTable(dataColumns, columnCount, formatter, styles) {
-                styles = extendStyles(styles);
-                var tableHtml = ['<table class="' + styles.tableClass + '"><thead class="' + styles.theadClass + '">'];
-                tableHtml[tableHtml.length] = tWrapper.buildHeaderRows((dataColumns || []).slice(0, columnCount), formatter);
-                tableHtml[tableHtml.length] = '</thead></table>';
-
-                return tableHtml.join('');
-            }
-
-            function randerFreezeHeaderTable(dataColumns, formatter, styles/*{tableClass:'', theadClass:'', tbodyClass:''}*/) {
-                styles = extendStyles(styles);
-                var tableHtml = ['<table class="' + styles.tableClass + '"><thead class="' + styles.theadClass + '">'];
-                tableHtml[tableHtml.length] = tWrapper.buildHeaderRows(dataColumns || [], formatter);
-                tableHtml[tableHtml.length] = '</thead></table>';
-
-                return tableHtml.join('');
-            }
-
-            function randerFreezeColumnTable(dataSource, rowsCount, columnsCount, headerFormatter, contentFormatter, styles) {
-                styles = extendStyles(styles);
-                var columns = dataSource.columns || [],
-                    rows = dataSource.rows || [],
-                    tableHtml = ['<table class="' + styles.tableClass + '">'],
-                    theadHtml = ['<thead class="' + styles.theadClass + '">'],
-                    tbodyHtml = ['<tbody class="' + styles.tbodyClass + '">'];
-
-                columnsCount = Math.min(columnsCount, columns.length);
-                rowsCount = Math.min(rowsCount, rows.length);
-
-                // build thead
-                theadHtml[theadHtml.length] = tWrapper.buildHeaderRows(columns.slice(0, columnsCount), headerFormatter);
-                theadHtml[theadHtml.length] = '</thead>';
-
-                // build tbody
-                tbodyHtml[tbodyHtml.length] = tWrapper.buildContentRows(rows.slice(0, rowsCount), contentFormatter, columnsCount)
-                tbodyHtml[tbodyHtml.length] = '</tbody>';
-
-                // build table
-                tableHtml[tableHtml.length] = theadHtml.join('');
-                tableHtml[tableHtml.length] = tbodyHtml.join('');
-                tableHtml[tableHtml.length] = '</table>';
-
-                return tableHtml.join('');
-            }
-
-            function randerFullTable(dataSource, rowsCount, headerFormatter, contentFormatter, styles) {
-                styles = extendStyles(styles);
-                var columns = dataSource.columns || [],
-                    rows = dataSource.rows || [],
-                    tableHtml = ['<table class="' + styles.tableClass + '">'],
-                    theadHtml = ['<thead class="' + styles.theadClass + '">'],
-                    tbodyHtml = ['<tbody class="' + styles.tbodyClass + '">'];
-
-                rowsCount = Math.min(rowsCount, rows.length);
-
-                // build thead
-                theadHtml[theadHtml.length] = tWrapper.buildHeaderRows(columns, headerFormatter);
-                theadHtml[theadHtml.length] = '</thead>';
-
-                // build tbody
-                tbodyHtml[tbodyHtml.length] = tWrapper.buildContentRows(rows.slice(0, rowsCount), contentFormatter)
-                tbodyHtml[tbodyHtml.length] = '</tbody>';
-
-                // build table
-                tableHtml[tableHtml.length] = theadHtml.join('');
-                tableHtml[tableHtml.length] = tbodyHtml.join('');
-                tableHtml[tableHtml.length] = '</table>';
-
-                return tableHtml.join('');
-            }
-
-        })(this, extOption);
     }
 
-    TableWrapper.prototype = {
-        constructor: TableWrapper,
-        resize: function (width) {
+    function FullTable(option) {
+        option.connainerTemplate = freezeFullContainerTemplate;
+        option.type = 'full';
+        TableBase.call(this, option);
+    }
+    extend(FullTable.prototype, {
+        constructor: FullTable,
+        rander: function (dataSource, headerFormatter, contentFormatter) {
+            var columns = dataSource.columns || [],
+                rows = dataSource.rows || [],
+                tableHtml = ['<table class="' + this.tableClass + '">'],
+                theadHtml = ['<thead class="' + this.theadClass + '">'],
+                tbodyHtml = ['<tbody class="' + this.tbodyClass + '">'];
+
+            // build thead
+            theadHtml[theadHtml.length] = buildHeaderRows(columns, headerFormatter);
+            theadHtml[theadHtml.length] = '</thead>';
+
+            // build tbody
+            tbodyHtml[tbodyHtml.length] = buildContentRows(rows, contentFormatter)
+            tbodyHtml[tbodyHtml.length] = '</tbody>';
+
+            // build table
+            tableHtml[tableHtml.length] = theadHtml.join('');
+            tableHtml[tableHtml.length] = tbodyHtml.join('');
+            tableHtml[tableHtml.length] = '</table>';
+
+            this.container.html(tableHtml.join(''));
+            this.table = this.container.children('table');
         },
         find: function (selector) {
             return this.table.find(selector);
-        },
-        buildHeaderRows: function (dataSource, formatter) {
-            var i = 0,
-                columns = dataSource || [],
-                count = dataSource.length;
-
-            if (!$.isFunction(formatter)) {
-                formatter = function (d) {
-                    var val = '&nbsp;';
-                    if (typeof d === 'object') {
-                        if (d.displayValue != '') {
-                            val = d.displayValue;
-                        }
-                    } else if (d != '') {
-                        val = d;
-                    }
-
-                    return val;
-                };
-            }
-
-            // build header
-            var trHtml = ['<tr>'];
-            for (i = 0; i < count; i++) {
-                trHtml[trHtml.length] = '<th data-sequence="' + i + '">' + formatter(columns[i]) + '</th>';
-            }
-            trHtml[trHtml.length] = '</tr>';
-
-            return trHtml.join('');
-        },
-        buildContentRows: function (dataSource, formatter, columnsCount) {
-            var rows = dataSource || [],
-                i = 0,
-                j = 0,
-                html = [],
-                rowsCount = dataSource.length;
-
-            if (rows.length > 0) {
-                columnsCount = columnsCount || row.length;
-                columnsCount = Math.min(columnsCount, row.length);
-            } else {
-                columnsCount = 0;
-            }
-
-            if (!$.isFunction(formatter)) {
-                formatter = function (d) {
-                    var val = '&nbsp;';
-                    if (typeof d === 'object') {
-                        if (d.displayValue != '') {
-                            val = d.displayValue;
-                        }
-                        if (d.hyperlink && d.hyperlink != '') {
-                            val = '<a href="' + d.hyperlink + '">' + val + '</a>';
-                        }
-                    } else if (d != '') {
-                        val = d;
-                    }
-
-                    return val;
-                };
-            }
-
-            // build rows
-            for (i = 0; i < rowsCount; i++) {
-                var trHtml = ['<tr>'];
-                var row = rows[i];
-                for (j = 0; j < columnsCount; j++) {
-                    trHtml[trHtml.length] = '<td>' + formatter(row[j]) + '</td>';
-                }
-                trHtml[trHtml.length] = '</tr>';
-                html[html.length] = trHtml.join('');
-            }
-
-            return html.join('');
-        },
-        paging: function (index) {
-            if (this.paging.enabled) {
-                var start = index * this.paging.size + 1,
-                    end = (index + 1) * this.paging.size,
-                    rowsHtml = '';
-
-                switch (this.type) {
-                    case 'full':
-                        rowsHtml = this.buildContentRows(this.dataSource.rows.slice(start, end), this.columnsContentFormatter);
-                        break;
-                    case 'column':
-                        rowsHtml = this.buildContentRows(this.dataSource.rows.slice(start, end), this.columnsContentFormatter, this.freezeColumns);
-                        break;
-                }
-
-                if (rowsHtml != '') {
-                    switch (this.paging.style) {
-                        case 'listing':
-                            this.find('>tbody').append(rowsHtml);
-                            break;
-                        case 'traditional':
-                            this.find('>tbody').html(rowsHtml);
-                            break;
-                    }
-                }
-            }
         }
-    };
-    // TableWrapper ------------------------------- END
+    });
+
+    function CornerTable(option) {
+        option.connainerTemplate = freezeCornerContainerTemplate;
+        option.type = 'corner';
+        TableBase.call(this, option);
+    }
+    extend(CornerTable.prototype, {
+        constructor: CornerTable,
+        rander: function (dataColumns, headerFormatter, headerHeight) {
+            var tableHtml = ['<table class="' + this.tableClass + '"><thead class="' + this.theadClass + '">'];
+            tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, headerFormatter, headerHeight);
+            tableHtml[tableHtml.length] = '</thead></table>';
+
+            this.container.html(tableHtml.join(''));
+            this.table = this.container.children('table');
+        },
+        find: function (selector) {
+            return this.table.find(selector);
+        }
+    });
+
+    function HeaderTable(option) {
+        option.connainerTemplate = freezeHeaderContainerTemplate;
+        option.type = 'header';
+        TableBase.call(this, option);
+    }
+    extend(HeaderTable.prototype, {
+        constructor: HeaderTable,
+        rander: function (dataColumns, headerFormatter, headerHeight, columnsWidthList) {
+            var tableHtml = ['<table class="' + this.tableClass + '"><thead class="' + this.theadClass + '">'];
+            tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, headerFormatter, headerHeight, columnsWidthList);
+            tableHtml[tableHtml.length] = '</thead></table>';
+
+            this.container.html(tableHtml.join(''));
+            this.table = this.container.children('table');
+        },
+        find: function (selector) {
+            return this.table.find(selector);
+        }
+    });
+
+    function ColumnTable(option) {
+        option.connainerTemplate = freezeColumnContainerTemplate;
+        option.type = 'column';
+        TableBase.call(this, option);
+    }
+    extend(ColumnTable.prototype, {
+        constructor: ColumnTable,
+        rander: function (columns, rows, headerHeight, columnsWidthList, headerFormatter, contentFormatter) {
+
+            var tableHtml = ['<table class="' + this.tableClass + '">'],
+                theadHtml = ['<thead class="' + this.theadClass + '">'],
+                tbodyHtml = ['<tbody class="' + this.tbodyClass + '">'];
+
+            columnsCount = columns.length;
+
+            // build thead
+            theadHtml[theadHtml.length] = buildHeaderRows(columns, headerFormatter, headerHeight, columnsWidthList);
+            theadHtml[theadHtml.length] = '</thead>';
+
+            // build tbody
+            tbodyHtml[tbodyHtml.length] = buildContentRows(rows, contentFormatter, columnsCount)
+            tbodyHtml[tbodyHtml.length] = '</tbody>';
+
+            // build table
+            tableHtml[tableHtml.length] = theadHtml.join('');
+            tableHtml[tableHtml.length] = tbodyHtml.join('');
+            tableHtml[tableHtml.length] = '</table>';
+
+            this.container.html(tableHtml.join(''));
+            this.table = this.container.children('table');
+        },
+        find: function (selector) {
+            return this.table.find(selector);
+        }
+    });
+    // tables
 
     // ResizeBar ------------------------------- GO
 
@@ -1107,10 +1028,12 @@
         return tableHtml.join('');
     }
 
-    function buildHeaderRows(dataSource, formatter) {
+    function buildHeaderRows(dataSource, formatter, height, columnsWidthList) {
         var i = 0,
             columns = dataSource || [],
             count = dataSource.length;
+
+        columnsWidthList = columnsWidthList || [];
 
         if (!$.isFunction(formatter)) {
             formatter = function (d) {
@@ -1127,10 +1050,19 @@
             };
         }
 
+        var thStarttag = '<th style="';
+        if (typeof height === 'number') {
+            thStarttag = '<th style="height: ' + height + 'px;';
+        }
+
         // build header
         var trHtml = ['<tr>'];
         for (i = 0; i < count; i++) {
-            trHtml[trHtml.length] = '<th data-sequence="' + i + '">' + formatter(columns[i]) + '</th>';
+            var thWidth = '';
+            if (typeof (columnsWidthList[i]) === 'number') {
+                thWidth = 'width: ' + columnsWidthList[i] + 'px;';
+            }
+            trHtml[trHtml.length] = thStarttag + thWidth + '" data-sequence="' + i + '">' + formatter(columns[i]) + '</th>';
         }
         trHtml[trHtml.length] = '</tr>';
 
@@ -1183,7 +1115,7 @@
         return html.join('');
     }
 
-    function buildPaging(index, size, total, styleClasses) {
+    function buildPager(index, size, total, styleClasses) {
         styleClasses = styleClasses || 'ks-pagination-links';
 
         var showSize = 7,
