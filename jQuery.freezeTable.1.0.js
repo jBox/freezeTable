@@ -119,7 +119,7 @@
     Tooltip.prototype = {
         constructor: Tooltip,
         show: function (message, htmlLabel) {
-            message = message.trim();
+            message = $.trim(message);
             if (typeof message === 'string' && message != '') {
                 if (htmlLabel) {
                     this.layout.html(message);
