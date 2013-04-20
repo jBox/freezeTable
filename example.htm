@@ -1,4 +1,4 @@
-﻿<html>
+<html>
 <head>
     <title>freezeTable example</title>
     <link href="yahoo-answers-paging.css" rel="stylesheet" type="text/css" />
@@ -23,6 +23,7 @@
     <script>
         var basicFreezeTable = $('#basicLayout').freezeTable({
             columns: {
+                freezed: false,
                 tooltip: { enabled: false }
             },
             header: {
@@ -49,9 +50,9 @@
                             source.columns[i].sortby = '';
                         }
                     }
-                    var scrollleft = basicFreezeTable.contentContainer.scrollLeft();
+                    var scrollleft = basicFreezeTable.fullTable.container.scrollLeft();
                     basicFreezeTable.redraw(source);
-                    basicFreezeTable.contentContainer.scrollLeft(scrollleft);
+                    basicFreezeTable.fullTable.container.scrollLeft(scrollleft);
                 }
             },
             dataSource: {
