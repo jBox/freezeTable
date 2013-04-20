@@ -1,4 +1,4 @@
-﻿// ref -- jQuery.freezeTable
+// ref -- jQuery.freezeTable
 var freezeTable = $('#tableLayout').freezeTable({
     layout: { width: 935, height: 800 },
     header: {
@@ -25,9 +25,9 @@ var freezeTable = $('#tableLayout').freezeTable({
                     source.columns[i].sortby = '';
                 }
             }
-            var scrollleft = freezeTable.contentContainer.scrollLeft();
+            var scrollleft = freezeTable.fullTable.container.scrollLeft();
             freezeTable.redraw(source);
-            freezeTable.contentContainer.scrollLeft(scrollleft);
+            freezeTable.fullTable.container.scrollLeft(scrollleft);
         }
     },
     columns: {
@@ -42,7 +42,8 @@ var freezeTable = $('#tableLayout').freezeTable({
             }
 
             return val;
-        }
+        },
+        freezed: true
     },
     dataSource: globalData
 });
