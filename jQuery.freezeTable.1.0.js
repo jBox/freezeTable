@@ -1,8 +1,9 @@
-﻿// ref -- jQuery.
+// ref -- jQuery.
 // freezeTable
 (function ($, undefined) {
 
-    var freezeCornerContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 3;"></div>',
+    var tableContainerTemplate = '<div class="table-container" style="overflow: hidden; position: absolute; z-index: 4;"></div>',
+        freezeCornerContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 3;"></div>',
         freezeColumnContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 2;"></div>',
         freezeHeaderContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 1;"></div>',
         freezeFullContainerTemplate = '<div style="background-color: white; position: absolute; z-index: 0; overflow: auto;"></div>',
@@ -17,7 +18,7 @@
         freezeColumnsWidthOffset = 20,
         freezeCornerContainerWidthOffset = 1,
         freezeColumnContainerWidthOffset = 18,
-        freezeColumnContainerHeightOffset = -4,
+        freezeColumnContainerHeightOffset = 0,
         resizeBarWidthOffset = -2,
         leftHorizontalScrollBarMarginOffset = -18,
         imageMarginMouseOffset = -10,
@@ -34,13 +35,26 @@
         var k = null;
         for (k in ext) {
             if (typeof (obj[k]) === 'object') {
-                extend(obj[k], ext[k]);
+                arguments.callee(obj[k], ext[k]);
             } else {
                 obj[k] = ext[k];
             }
         }
 
         return obj;
+    }
+
+    function inherit(sub, base) {
+
+        function object(obj) {
+            function F() { }
+            F.prototype = obj;
+            return new F();
+        }
+
+        var prototype = object(base.prototype);
+        prototype.constructor = sub;
+        sub.prototype = prototype;
     }
 
     // mouse event ---------------------------------------- GO
@@ -192,12 +206,18 @@
 
         this.container = $(option.container);
         this.tables = [];
+        this.resizeBar = {};
         // remove container
         delete option.container;
 
         extend(this, option);
 
         // init. DOM            
+        this.fullTable = undefined;
+        this.cornerTable = undefined;
+        this.headerTable = undefined;
+        this.columnsTable = undefined;
+
         this.contentContainer = $(contentContainerTemplate);
         this.freezeHeaderContainer = $(freezeHeaderContainerTemplate);
         this.freezeColumnContainer = $(freezeColumnContainerTemplate);
@@ -206,17 +226,13 @@
         tooltip = new Tooltip(this.tooltipTemplate || tooltipTemplate);
         this.mousemover = new Mousemover();
 
-        this.newInit();
+        this.init();
     }
 
     FreezeTable.prototype = {
         constructor: FreezeTable,
 
-        newInit:function(){
-            this.tables = [];
-            var freezedCount = this.columns.freezedCount,
-               i = 0;
-
+        init: function () {
             // setup table
             this.container
                 .width(this.layout.width)
@@ -242,29 +258,31 @@
                         }
 
                         var source = this.dataSource.rows.slice(s, e);
-                        var fulltable = buildContentRows(source, this.columns.formatter);
-                        var columntable = buildContentRows(source, this.columns.formatter, this.columns.freezeCount);
-
-                        this.tables[0].find('tbody:first').append(fulltable);
-                        // ??
-                        // this.tables[3].find('tbody:first').append(columntable);
-                    }
+                        this.fullTable.append(source);
+                        if (this.columnsTable) this.columnsTable.append(source, this.columns.freezeCount);
+                    };
                 }
             }
 
-            var tableOption = {
+            var baseOption = {
                 tableClass: this.layout.tableClass,
                 theadClass: this.layout.theadClass,
-                tbodyClass: this.layout.tbodyClass,
-                width:this.layout.width,
-                height :this.layout.height
+                tbodyClass: this.layout.tbodyClass
             };
 
-            var fulltable = new FullTable(tableOption);
-            fulltable.rander(dataSource, this.header.formatter, this.columns.formatter);
-            this.tables.push(fulltable);
+            // 初始化 FullTable
+            var fulltableOption = extend({
+                headerFormatter: this.header.formatter,
+                contentFormatter: this.columns.formatter
+            }, baseOption);
+            var fulltable = new FullTable(fulltableOption);
+            fulltable.rander(dataSource);
+            fulltable.container.width(this.layout.width).height(this.layout.height);
+            this.fullTable = fulltable;
             this.container.html(fulltable.container);
+            // 初始化 FullTable
 
+            // 计算FullTable width & height
             var headerCells = fulltable.find('th');
             var columnWidthList = [],
                 showWidth = 0;
@@ -277,14 +295,9 @@
                 columnWidthList[columnWidthList.length] = width;
             });
 
-            // after content is ready, init base size
             var freezeWidth = this.columns.defaultFreezedWidth;
             var tableHeight = fulltable.table.height() + tableHeaderHeightOffset;
             var tableWidth = fulltable.table.width();
-
-            if (!this.header.freezed) {
-                this.layout.height = contentTable.height() + 20;
-            }
 
             if (this.paging.enabled && this.paging.style == 'traditional') {
                 this.container.height(this.layout.height + 50);
@@ -292,325 +305,328 @@
                 this.container.height(this.layout.height);
             }
 
+            // 当内容不够宽时，放大内容宽度
             if (showWidth < this.layout.width - freezeWidth) {
                 tableWidth = Math.floor(tableWidth * (this.layout.width - freezeWidth) / showWidth);
                 fulltable.table.width(tableWidth);
             }
 
             var headerHeight = headerCells.height() + tableHeaderHeightOffset;
-            var freezeColumnsWidth = headerCells.first().width() + freezeColumnsWidthOffset;
+            var freezeColumnsWidth = columnWidthList[0] + freezeColumnsWidthOffset;
 
-            fulltable.container
-                .css('margin-top', headerHeight)
-                .css('margin-left', freezeWidth)
-                .width(this.layout.width - freezeWidth)
-                .height(this.layout.height - headerHeight);
+            if (this.header.freezed) {
 
-            fulltable.table.css('margin-top', -headerHeight)
-                .css('margin-left', -freezeColumnsWidth);
+                fulltable.container
+                    .css('margin-top', headerHeight)
+                    .height(this.layout.height - headerHeight);
+                fulltable.table.css('margin-top', -headerHeight);
 
-            var headertable = new HeaderTable(tableOption);
-            headertable.rander(dataSource.columns, this.header.formatter, this.columns.formatter, columnWidthList);
-            this.tables.push(headertable);
-            this.container.append(headertable.container);
-        },
+                // 表头 -------------------------------------- start
+                var headertableOption = extend({
+                    width: tableWidth,
+                    height: headerHeight,
+                    formatter: this.header.formatter,
+                    columnWidthList: columnWidthList
+                }, baseOption);
+                var headertable = new HeaderTable(headertableOption);
+                headertable.rander(dataSource.columns);
 
-        init: function () {
-            var pagingIndex = 1;
-            var dataSource = { columns: this.dataSource.columns, rows: this.dataSource.rows };
-            if (this.paging.enabled) {
-                var start = pagingIndex - 1,
-                    end = this.paging.size;
+                this.headerTable = headertable;
+                this.container.append(headertable.container);
+                // 表头 -------------------------------------- end
 
-                dataSource.rows = this.dataSource.rows.slice(0, end);
+                // 当同时锁定表头与列时
+                if (this.columns.freezed) {
+                    headertable.container
+                        .css('margin-left', freezeWidth)
+                        .width(this.layout.width - freezeWidth);
+                    headertable.table.css('margin-left', -freezeColumnsWidth);
+                } else {
+                    headertable.container.width(this.layout.width);
+                }
+            }
 
-                // setup listingLoading handler
-                if (typeof (this.paging.listingLoading) !== 'function') {
-                    this.paging.listingLoading = function (index, size, total) {
+            if (this.columns.freezed) {
+                fulltable.container.css('margin-left', freezeWidth)
+                    .width(this.layout.width - freezeWidth);
 
-                        // add 10/9
-                        var s = Math.floor(Math.pow((10 / 9), (index - 2)) * size),
-                            e = Math.floor(Math.pow((10 / 9), (index - 1)) * size);
+                fulltable.table.css('margin-left', -freezeColumnsWidth);
+                // 列 -------------------------------------- start  
+                var columnstableOption = extend({
+                    width: freezeWidth - freezeColumnContainerWidthOffset,
+                    height: tableHeight,
+                    headerHeight: headerHeight,
+                    headerFormatter: this.header.formatter,
+                    contentFormatter: this.columns.formatter
+                }, baseOption);
+                var columnstable = new ColumnTable(columnstableOption);
+                columnstable.rander({ columns: dataSource.columns.slice(0, this.columns.freezedCount), rows: dataSource.rows });
 
-                        if (e >= total) {
-                            return;
-                        }
+                this.columnsTable = columnstable;
+                this.container.append(columnstable.container);
+                columnstable.container.width(freezeWidth);
+                // 列 -------------------------------------- end
 
-                        var source = this.dataSource.rows.slice(s, e);
-                        var fulltable = buildContentRows(source, this.columns.formatter);
-                        var columntable = buildContentRows(source, this.columns.formatter, this.columns.freezeCount);
+                // 当同时锁定表头与列时
+                if (this.header.freezed) {
+                    columnstable.container.css('margin-top', headerHeight)
+                        .height(this.layout.height - headerHeight + freezeColumnContainerHeightOffset);
+                    columnstable.table.css('margin-top', -headerHeight);
+                } else {
+                    columnstable.container.height(this.layout.height);
+                }
 
-                        this.contentContainer.find('tbody:first').append(fulltable);
-                        this.freezeColumnContainer.find('tbody:first').append(columntable);
+                // horizontal - enhanced
+                if (this.horizontalEnhanced) {
+
+                    var baseHeaderColumnOffset = $(headerCells[1]).offset().left,
+                        leftHorizontalScrollBar = $(leftHorizontalScrollBarTemplate),
+                        rightHorizontalScrollBar = $(rightHorizontalScrollBarTemplate),
+                        isLeftBarVisiable = false,
+                        isRightBarVisiable = false;
+
+                    leftHorizontalScrollBar.css({ 'margin-left': freezeWidth + leftHorizontalScrollBarMarginOffset, 'height': this.layout.height });
+                    rightHorizontalScrollBar.css({ 'margin-left': this.layout.width, 'height': this.layout.height });
+
+                    this.container.append(leftHorizontalScrollBar);
+                    this.container.append(rightHorizontalScrollBar);
+
+                    // 绑定事件
+                    (function (table) {
+                        leftHorizontalScrollBar
+                            .unbind('mouseover')
+                            .unbind('mouseout')
+                            .bind('mouseover', function (event) {
+                                isLeftBarVisiable = true;
+                                $(this).children('img').show();
+                                return false;
+                            })
+                            .bind('mouseout', function () {
+                                $(this).children('img').hide();
+                                isLeftBarVisiable = false;
+                                return false;
+                            })
+                            .children('img').bind('click', function () {
+                                var offset = baseHeaderColumnOffset;
+                                headerCells.each(function (index) {
+                                    var os = $(this).offset().left;
+                                    if (os < baseHeaderColumnOffset) {
+                                        offset = os;
+                                    }
+                                });
+
+                                var scrollOffset = baseHeaderColumnOffset - offset;
+                                table.fullTable.container.animate({ scrollLeft: '-=' + scrollOffset }, 300);
+                            });
+
+                        rightHorizontalScrollBar
+                            .unbind('mouseover')
+                            .unbind('mouseout')
+                            .bind('mouseover', function (event) {
+                                isRightBarVisiable = true;
+                                $(this).children('img').show();
+                                return false;
+                            })
+                            .bind('mouseout', function () {
+                                $(this).children('img').hide();
+                                isRightBarVisiable = false;
+                                return false;
+                            })
+                            .children('img').bind('click', function () {
+                                var offset = baseHeaderColumnOffset;
+                                headerCells.each(function (index) {
+                                    var os = $(this).offset().left;
+                                    if (offset == baseHeaderColumnOffset && os > baseHeaderColumnOffset) {
+                                        offset = os;
+                                    }
+                                });
+
+                                var scrollOffset = offset - baseHeaderColumnOffset;
+                                table.fullTable.container.animate({ scrollLeft: '+=' + scrollOffset }, 300);
+                            });
+
+                        table.mousemover.bind('horizontal-enhanced-mousemove', function (event, pos) {
+                            if (isLeftBarVisiable) {
+                                var leftOffset = leftHorizontalScrollBar.position().top;
+                                leftHorizontalScrollBar.children('img').css('margin-top', pos.y - leftOffset + imageMarginMouseOffset);
+                            }
+
+                            if (isRightBarVisiable) {
+                                var rightOffset = rightHorizontalScrollBar.position().top;
+                                rightHorizontalScrollBar.children('img').css('margin-top', pos.y - rightOffset + imageMarginMouseOffset);
+                            }
+                        });
+                    })(this);
+
+                    // resize bind
+                    if (this.columns.resizable) {
+                        var bar = $(resizeBarTemplate).css({ 'margin-left': freezeWidth + resizeBarWidthOffset, 'height': this.layout.height });
+                        this.container.append(bar);
+                        this.resizeBar = new ResizeBar(bar);
+                        this.resizeBar.freezeWidth = freezeWidth;
+                        this.resizeBar.freezeMinWidth = this.columns.defaultFreezedWidth;
+                        this.resizeBar.freezeMaxWidth = this.layout.width - 160;
+
+                        (function (table) {
+                            table.resizeBar.bind('begin', function () {
+                                leftHorizontalScrollBar.hide();
+                            });
+                            table.resizeBar.bind('complate', function (offset) {
+                                table.resize(offset);
+
+                                // horizontal scroll bar
+                                leftHorizontalScrollBar.css({ 'margin-left': offset + leftHorizontalScrollBarMarginOffset }).show();
+                            });
+                        })(this);
                     }
                 }
             }
 
-            var freezedCount = this.columns.freezedCount,
-                i = 0;
+            if (this.header.freezed && this.columns.freezed) {
+                // 固定角 -------------------------------------- start
+                var cornertableOption = extend({
+                    width: freezeWidth - freezeColumnContainerWidthOffset,
+                    height: headerHeight,
+                    formatter: this.header.formatter,
+                }, baseOption);
+                var cornertable = new CornerTable(cornertableOption);
+                cornertable.rander(dataSource.columns.slice(0, this.columns.freezedCount));
 
-            // setup table
-            this.container
-                .width(this.layout.width)
-                .css('overflow', 'hidden')
-                .html(this.contentContainer)
-                .append(this.freezeCornerContainer)
-                .append(this.freezeHeaderContainer)
-                .append(this.freezeColumnContainer);
-
-            // 内容 -------------------------------------- start
-            this.contentContainer.html(randerFullTable(dataSource, this.header.formatter, this.columns.formatter, this.layout));
-            var contentTable = this.contentContainer.children('table');
-            var contentTableHeaderCells = contentTable.find('th');
-
-            if (!this.header.freezed) {
-                this.layout.height = contentTable.height() + 20;
+                this.cornerTable = cornertable;
+                this.container.append(cornertable.container);
+                // 固定角 -------------------------------------- end
             }
 
-            if (this.paging.enabled && this.paging.style == 'traditional') {
-                this.container.height(this.layout.height + 50);
-            } else {
-                this.container.height(this.layout.height);
-            }
-
-            // after content is ready, init base size
-            var freezeWidth = this.columns.defaultFreezedWidth;
-            var tableHeight = contentTable.height() + tableHeaderHeightOffset;
-            var tableWidth = contentTable.width();
-
-            var showWidth = 0;
-            contentTableHeaderCells.each(function (index) {
-                if (index != 0) { showWidth += $(this).width(); }
-            });
-            if (showWidth < this.layout.width - freezeWidth) {
-                tableWidth = Math.floor(tableWidth * (this.layout.width - freezeWidth) / showWidth);
-                contentTable.width(tableWidth);
-            }
-
-            var headerHeight = contentTableHeaderCells.height() + tableHeaderHeightOffset;
-            // why plus 20?
-            var freezeColumnsWidth = contentTableHeaderCells.first().width() + freezeColumnsWidthOffset;
-
-            this.contentContainer
-                .css('margin-top', headerHeight)
-                .css('margin-left', freezeWidth)
-                .width(this.layout.width - freezeWidth)
-                .height(this.layout.height - headerHeight);
-
-            contentTable.css('margin-top', -headerHeight)
-                .css('margin-left', -freezeColumnsWidth);
-            // 内容 -------------------------------------- end
-
-            // 表头与列交叉 -------------------------------------- start			
-            var cornerWidth = freezeWidth + freezeCornerContainerWidthOffset;
-            this.freezeCornerContainer
-                .width(cornerWidth)
-                .html(randerFreezeCorner(dataSource, freezedCount, this.header.formatter, this.layout));
-
-            this.freezeCornerContainer.find('table').css({ 'table-layout': 'fixed' });
-
-            this.freezeCornerContainer.find('th')
-                .width(cornerWidth)
-                .height(headerHeight);
-            // 表头与列交叉 -------------------------------------- end
-
-            // 表头 -------------------------------------- start
-            this.freezeHeaderContainer
-                .width(this.layout.width)
-                .html(randerFreezeHeader(dataSource, this.header.formatter, this.layout));
-
-            var freezeHeaderTable = this.freezeHeaderContainer.children('table');
-
-            freezeHeaderTable.width(tableWidth)
-                .css('margin-left', -freezeColumnsWidth);
-
-            var freezeHeaderCells = this.freezeHeaderContainer.find('th');
-
-            for (i = 0; i < contentTableHeaderCells.length; i++) {
-                $(freezeHeaderCells[i]).width($(contentTableHeaderCells[i]).width());
-            }
-
-            this.freezeHeaderContainer
-                .css('margin-left', freezeWidth)
-                .width(this.freezeHeaderContainer.width() - freezeWidth);
-            // 表头 -------------------------------------- end
-
-            // 列 -------------------------------------- start
-            this.freezeColumnContainer
-                .height(this.layout.height - headerHeight + freezeColumnContainerHeightOffset)
-                .width(freezeWidth)
-                .css('margin-top', headerHeight)
-                .html(randerFreezeColumnTable(dataSource, freezedCount, this.header.formatter, this.columns.formatter, this.layout));
-
-            var freezeColumnTable = this.freezeColumnContainer.children('table');
-
-            this.freezeColumnContainer.find('th')
-                .width(freezeWidth - freezeColumnContainerWidthOffset)
-                .height(headerHeight);
-
-            this.freezeColumnContainer.find('td')
-                .width(freezeWidth - freezeColumnContainerWidthOffset);
-
-            freezeColumnTable.css({ 'margin-top': -headerHeight, 'table-layout': 'fixed', 'width': freezeWidth - freezeColumnContainerWidthOffset });
-            // 列 -------------------------------------- end
-
-            // setup events bind.
+            // bind scroll event.
             (function (table) {
-                var freezeInnter = {
-                    isLeftBarVisiable: false,
-                    isRightBarVisiable: false
-                };
-                var contentTableHeaderCells = table.contentContainer.find('th');
-                // horizontal - enhanced
-                if (table.horizontalEnhanced) {
 
-                    var baseHeaderColumnOffset = $(contentTableHeaderCells[1]).offset().left;
+                var fullContainer = table.fullTable.container,
+                    headerContainer,
+                    columnsContainer,
+                    scrollHandler,
+                    headerHeight = 0,
+                    freezeWidth = 0;
 
-                    table.leftHorizontalScrollBar = $(leftHorizontalScrollBarTemplate)
-                        .css({ 'margin-left': freezeWidth + leftHorizontalScrollBarMarginOffset, 'height': table.layout.height });
-                    table.rightHorizontalScrollBar = $(rightHorizontalScrollBarTemplate)
-                        .css({ 'margin-left': table.layout.width, 'height': table.layout.height });
-                    table.container.append(table.leftHorizontalScrollBar);
-                    table.container.append(table.rightHorizontalScrollBar);
-
-                    freezeInnter.isLeftBarVisiable = false;
-                    freezeInnter.isRightBarVisiable = false;
-
-                    table.leftHorizontalScrollBar
-                        .unbind('mouseover')
-                        .unbind('mouseout')
-                        .bind('mouseover', function (event) {
-                            freezeInnter.isLeftBarVisiable = true;
-                            $(this).children('img').show();
-                            return false;
-                        })
-                        .bind('mouseout', function () {
-                            $(this).children('img').hide();
-                            freezeInnter.isLeftBarVisiable = false;
-                            return false;
-                        })
-                        .children('img').bind('click', function () {
-                            var offset = baseHeaderColumnOffset;
-                            contentTableHeaderCells.each(function (index) {
-                                var os = $(this).offset().left;
-                                if (os < baseHeaderColumnOffset) {
-                                    offset = os;
-                                }
-                            });
-
-                            var scrollOffset = baseHeaderColumnOffset - offset;
-                            table.contentContainer.animate({ scrollLeft: '-=' + scrollOffset }, 300);
-                        });
-
-                    table.rightHorizontalScrollBar
-                        .unbind('mouseover')
-                        .unbind('mouseout')
-                        .bind('mouseover', function (event) {
-                            freezeInnter.isRightBarVisiable = true;
-                            $(this).children('img').show();
-                            return false;
-                        })
-                        .bind('mouseout', function () {
-                            $(this).children('img').hide();
-                            freezeInnter.isRightBarVisiable = false;
-                            return false;
-                        })
-                        .children('img').bind('click', function () {
-                            var offset = baseHeaderColumnOffset;
-                            contentTableHeaderCells.each(function (index) {
-                                var os = $(this).offset().left;
-                                if (offset == baseHeaderColumnOffset && os > baseHeaderColumnOffset) {
-                                    offset = os;
-                                }
-                            });
-
-                            var scrollOffset = offset - baseHeaderColumnOffset;
-                            table.contentContainer.animate({ scrollLeft: '+=' + scrollOffset }, 300);
-                        });
-
-                    table.mousemover.bind('horizontal-enhanced-mousemove', function (event, pos) {
-                        if (freezeInnter.isLeftBarVisiable) {
-                            var leftOffset = table.leftHorizontalScrollBar.position().top;
-                            table.leftHorizontalScrollBar.children('img').css('margin-top', pos.y - leftOffset + imageMarginMouseOffset);
-                        }
-
-                        if (freezeInnter.isRightBarVisiable) {
-                            var rightOffset = table.rightHorizontalScrollBar.position().top;
-                            table.rightHorizontalScrollBar.children('img').css('margin-top', pos.y - rightOffset + imageMarginMouseOffset);
-                        }
-                    });
+                if (table.headerTable) {
+                    headerContainer = table.headerTable.container;
                 }
 
-                // resize bind
-                if (table.columns.resizable) {
-                    var bar = $(resizeBarTemplate).css({ 'margin-left': freezeWidth + resizeBarWidthOffset, 'height': table.layout.height });
-                    table.container.append(bar);
-                    table.resizeBar = new ResizeBar(bar);
-                    table.resizeBar.freezeWidth = freezeWidth;
-                    table.resizeBar.freezeMinWidth = table.columns.defaultFreezedWidth;
-                    table.resizeBar.freezeMaxWidth = table.layout.width - 160;
-
-                    table.resizeBar.bind('begin', function () {
-                        table.leftHorizontalScrollBar.hide();
-                    });
-                    table.resizeBar.bind('complate', function (width) {
-                        table.resize(width);
-                    });
+                if (table.columnsTable) {
+                    columnsContainer = table.columnsTable.container;
                 }
 
-                // bind scroll event.
-                table.contentContainer
-                    .unbind('scroll')
-                    .bind('scroll', function () {
-                        var scrollLeft = table.contentContainer.scrollLeft(),
-                            scrollTop = table.contentContainer.scrollTop(),
-                            width = table.resizeBar.freezeWidth || freezeWidth;
+                if (headerContainer && columnsContainer) {
+                    headerHeight = fullContainer.find('th').height() + tableHeaderHeightOffset;
+                    scrollHandler = function () {
+                        freezeWidth = table.resizeBar.freezeWidth || freezeWidth;
+                        var scrollLeft = fullContainer.scrollLeft(),
+                            scrollTop = fullContainer.scrollTop();
 
-                        table.freezeHeaderContainer.scrollLeft(scrollLeft);
-                        table.freezeColumnContainer.scrollTop(scrollTop);
-
-                        if (scrollLeft > table.freezeHeaderContainer.scrollLeft()) {
-                            var vl = scrollLeft - table.freezeHeaderContainer.scrollLeft();
-                            table.freezeHeaderContainer.css('margin-left', width - vl);
+                        headerContainer.scrollLeft(scrollLeft);
+                        var realScrollLeft = headerContainer.scrollLeft();
+                        if (scrollLeft > realScrollLeft) {
+                            var vl = scrollLeft - realScrollLeft;
+                            headerContainer.css('margin-left', freezeWidth - vl);
                         } else {
-                            table.freezeHeaderContainer.css('margin-left', width);
+                            headerContainer.css('margin-left', freezeWidth);
                         }
 
-                        if (scrollTop > table.freezeColumnContainer.scrollTop()) {
-                            var vt = scrollTop - table.freezeColumnContainer.scrollTop();
-                            table.freezeColumnContainer.css('margin-top', headerHeight - vt);
+                        columnsContainer.scrollTop(scrollTop);
+                        if (scrollTop > columnsContainer.scrollTop()) {
+                            var vt = scrollTop - columnsContainer.scrollTop();
+                            columnsContainer.css('margin-top', headerHeight - vt);
                         } else {
-                            table.freezeColumnContainer.css('margin-top', headerHeight);
+                            columnsContainer.css('margin-top', headerHeight);
                         }
-                    });
+                    };
+                } else if (headerContainer && !columnsContainer) {
+                    scrollHandler = function () {
+                        freezeWidth = table.resizeBar.freezeWidth || freezeWidth;
+                        var scrollLeft = fullContainer.scrollLeft();
 
-                // bind mouseover & mouseleave event.
-                table.freezeColumnContainer
-                    .unbind('mouseover')
-                    .unbind('mouseleave')
-                    .bind('mouseover', function (event) {
-                        if (table.columns.tooltip.enabled) {
-                            if (event.target.nodeName == 'TD') {
+                        headerContainer.scrollLeft(scrollLeft);
+                        var realScrollLeft = headerContainer.scrollLeft();
+                        if (scrollLeft > realScrollLeft) {
+                            var vl = scrollLeft - realScrollLeft;
+                            headerContainer.css('margin-left', freezeWidth - vl);
+                        } else {
+                            headerContainer.css('margin-left', freezeWidth);
+                        }
+                    };
+                } else if (columnsContainer && !headerContainer) {
+                    scrollHandler = function () {
+                        var scrollTop = fullContainer.scrollTop();
 
-                                if (typeof table.columns.tooltip.formatter !== 'function') {
-                                    table.columns.tooltip.formatter = function (target) {
-                                        return $(target).text();
-                                    };
-                                }
+                        columnsContainer.scrollTop(scrollTop);
+                        if (scrollTop > columnsContainer.scrollTop()) {
+                            var vt = scrollTop - columnsContainer.scrollTop();
+                            columnsContainer.css('margin-top', headerHeight - vt);
+                        } else {
+                            columnsContainer.css('margin-top', headerHeight);
+                        }
+                    };
+                }
 
-                                tooltip.show(table.columns.tooltip.formatter(event.target), table.columns.tooltip.htmlLabel);
+                if (scrollHandler) {
+                    fullContainer.unbind('scroll').bind('scroll', scrollHandler);
+                }
+            })(this);
+
+            // ...
+            (function (table) {// bind mouseover & mouseleave event.
+                var fullContainer = table.fullTable.container,
+                    columnsContainer = undefined,
+                    headerContainer = undefined,
+                    cornerContainer = undefined;
+
+                if (table.headerTable) {
+                    headerContainer = table.headerTable.container;
+                }
+
+                if (table.cornerTable) {
+                    cornerContainer = table.cornerTable.container;
+                }
+
+                function tooltipHandler(event) {
+                    var tp = table.columns.tooltip;
+                    if (tp.enabled) {
+                        if (event.target.nodeName == 'TD') {
+                            if (typeof tp.formatter !== 'function') {
+                                tp.formatter = function (target) {
+                                    return $(target).text();
+                                };
                             }
-                            return false;
+                            tooltip.show(tp.formatter(event.target), tp.htmlLabel);
                         }
-                        return true;
-                    })
-                    .bind('mouseleave', function (event) {
-                        if (table.columns.tooltip.enabled) {
-                            tooltip.hide();
-                            return false;
-                        }
-                        return true;
-                    });
+                        return false;
+                    }
+                    return true;
+                }
+
+                if (table.columnsTable) {
+                    columnsContainer = table.columnsTable.container;
+                    columnsContainer.unbind('mouseover')
+                        .unbind('mouseleave')
+                        .bind('mouseover', tooltipHandler)
+                        .bind('mouseleave', function (event) {
+                            if (table.columns.tooltip.enabled) {
+                                tooltip.hide();
+                                return false;
+                            }
+                            return true;
+                        });
+                } else {
+                    fullContainer.unbind('mouseover')
+                        .unbind('mouseleave')
+                        .bind('mouseover', tooltipHandler)
+                        .bind('mouseleave', function (event) {
+                            if (table.columns.tooltip.enabled) {
+                                tooltip.hide();
+                                return false;
+                            }
+                            return true;
+                        });
+                }
 
                 function headerClickHandler(event) {
                     try {
@@ -638,31 +654,32 @@
                 }
 
                 if (table.header.click) {
-                    table.freezeCornerContainer.unbind('click')
-                        .bind('click', headerClickHandler);
-                    table.freezeHeaderContainer.unbind('click')
-                        .bind('click', headerClickHandler);
+                    fullContainer.unbind('click').bind('click', headerClickHandler);
+                    if (headerContainer) headerContainer.unbind('click').bind('click', headerClickHandler);
+                    if (columnsContainer) columnsContainer.unbind('click').bind('click', headerClickHandler);
+                    if (cornerContainer) cornerContainer.unbind('click').bind('click', headerClickHandler);
                 }
 
                 if (table.paging.enabled) {
                     table.paging.total = table.paging.total || table.dataSource.rows.length;
-                    var paging = table.paging;
+                    var paging = table.paging,
+                        isListingLoading = false;
 
                     switch (paging.style) {
                         case 'listing':
-                            table.contentContainer.bind('scroll', function () {
+                            fullContainer.bind('scroll', function () {
                                 if (this.scrollHeight > 0) {
                                     var $this = $(this);
                                     var thisHeight = $this.height();
                                     var offsetlimit = Math.floor(thisHeight / 4);
                                     var topOffset = this.scrollHeight - $this.scrollTop() - thisHeight;
-                                    if (!table.isListingLoading && topOffset <= offsetlimit) {
-                                        table.isListingLoading = true;
+                                    if (!isListingLoading && topOffset <= offsetlimit) {
+                                        isListingLoading = true;
 
                                         try {
                                             paging.listingLoading.call(table, ++pagingIndex, paging.size, paging.total);
                                         } catch (ex) { /*ignore*/ }
-                                        table.isListingLoading = false;
+                                        isListingLoading = false;
                                     }
                                 }
                             });
@@ -681,31 +698,11 @@
             this.init();
         },
 
-        resize: function (width) {
-
-            this.contentContainer.css('margin-left', width)
-                .width(this.layout.width - width);
-
-            // header
-            this.freezeHeaderContainer.css('margin-left', width)
-                .width(this.layout.width - width);
-
-            // column
-            this.freezeColumnContainer.width(width);
-            this.freezeColumnContainer.children('table')
-                .width(width - freezeColumnContainerWidthOffset);
-            this.freezeColumnContainer.find('th')
-                .width(width - freezeColumnContainerWidthOffset);
-            this.freezeColumnContainer.find('td')
-                .width(width - freezeColumnContainerWidthOffset);
-
-            // corner
-            var cornerWidth = width + freezeCornerContainerWidthOffset;
-            this.freezeCornerContainer.width(cornerWidth);
-            this.freezeCornerContainer.find('th').width(cornerWidth);
-
-            // horizontal scroll bar
-            this.leftHorizontalScrollBar.css({ 'margin-left': width + leftHorizontalScrollBarMarginOffset }).show();
+        resize: function (offset) {
+            this.fullTable.resize(offset, this.layout.width - offset);
+            if (this.cornerTable) this.cornerTable.resize(offset);
+            if (this.headerTable) this.headerTable.resize(offset, this.layout.width - offset);
+            if (this.columnsTable) this.columnsTable.resize(offset);
         }
     };
     // FreezeTable ------------------------------- END
@@ -722,15 +719,21 @@
         this.container = $(option.connainerTemplate);
         this.table = null;
     }
-
+    extend(TableBase.prototype, {
+        find: function (selector) {
+            return this.table.find(selector);
+        }
+    });
     function FullTable(option) {
         option.connainerTemplate = freezeFullContainerTemplate;
         option.type = 'full';
         TableBase.call(this, option);
+        this.headerFormatter = option.headerFormatter;
+        this.contentFormatter = option.contentFormatter;
     }
+    inherit(FullTable, TableBase);
     extend(FullTable.prototype, {
-        constructor: FullTable,
-        rander: function (dataSource, headerFormatter, contentFormatter) {
+        rander: function (dataSource) {
             var columns = dataSource.columns || [],
                 rows = dataSource.rows || [],
                 tableHtml = ['<table class="' + this.tableClass + '">'],
@@ -738,11 +741,11 @@
                 tbodyHtml = ['<tbody class="' + this.tbodyClass + '">'];
 
             // build thead
-            theadHtml[theadHtml.length] = buildHeaderRows(columns, headerFormatter);
+            theadHtml[theadHtml.length] = buildHeaderRows(columns, this.headerFormatter);
             theadHtml[theadHtml.length] = '</thead>';
 
             // build tbody
-            tbodyHtml[tbodyHtml.length] = buildContentRows(rows, contentFormatter)
+            tbodyHtml[tbodyHtml.length] = buildContentRows(rows, this.contentFormatter)
             tbodyHtml[tbodyHtml.length] = '</tbody>';
 
             // build table
@@ -753,8 +756,11 @@
             this.container.html(tableHtml.join(''));
             this.table = this.container.children('table');
         },
-        find: function (selector) {
-            return this.table.find(selector);
+        append: function (rows) {
+            this.find('tbody:first').append(buildContentRows(rows, this.contentFormatter));
+        },
+        resize: function (offset, viewWidth) {
+            this.container.css('margin-left', offset).width(viewWidth);
         }
     });
 
@@ -762,19 +768,23 @@
         option.connainerTemplate = freezeCornerContainerTemplate;
         option.type = 'corner';
         TableBase.call(this, option);
+        this.formatter = option.formatter;
     }
+    inherit(CornerTable, TableBase);
     extend(CornerTable.prototype, {
-        constructor: CornerTable,
-        rander: function (dataColumns, headerFormatter, headerHeight) {
-            var tableHtml = ['<table class="' + this.tableClass + '"><thead class="' + this.theadClass + '">'];
-            tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, headerFormatter, headerHeight);
+        rander: function (dataColumns) {
+            var tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + this.width + 'px; height: ' + this.height + 'px;"><thead class="' + this.theadClass + '">'];
+            tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, this.formatter, this.height, [this.width]);
             tableHtml[tableHtml.length] = '</thead></table>';
 
             this.container.html(tableHtml.join(''));
             this.table = this.container.children('table');
         },
-        find: function (selector) {
-            return this.table.find(selector);
+        resize: function (offset) {
+            // corner
+            var cornerWidth = offset + freezeCornerContainerWidthOffset;
+            this.container.width(cornerWidth);
+            this.find('th').width(cornerWidth);
         }
     });
 
@@ -782,19 +792,22 @@
         option.connainerTemplate = freezeHeaderContainerTemplate;
         option.type = 'header';
         TableBase.call(this, option);
+        this.formatter = option.formatter;
+        this.columnWidthList = option.columnWidthList;
     }
+    inherit(HeaderTable, TableBase);
     extend(HeaderTable.prototype, {
-        constructor: HeaderTable,
-        rander: function (dataColumns, headerFormatter, headerHeight, columnsWidthList) {
-            var tableHtml = ['<table class="' + this.tableClass + '"><thead class="' + this.theadClass + '">'];
-            tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, headerFormatter, headerHeight, columnsWidthList);
+        rander: function (dataColumns) {
+            var tableHtml = ['<table class="' + this.tableClass + '" style="width: ' + this.width + 'px; height: ' + this.height + 'px;"><thead class="' + this.theadClass + '">'];
+            tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, this.formatter, this.height, this.columnWidthList);
             tableHtml[tableHtml.length] = '</thead></table>';
 
             this.container.html(tableHtml.join(''));
             this.table = this.container.children('table');
         },
-        find: function (selector) {
-            return this.table.find(selector);
+        fixed: function () { },
+        resize: function (offset, viewWidth) {
+            this.container.css('margin-left', offset).width(viewWidth);
         }
     });
 
@@ -802,23 +815,26 @@
         option.connainerTemplate = freezeColumnContainerTemplate;
         option.type = 'column';
         TableBase.call(this, option);
+        this.headerHeight = option.headerHeight;
+        this.headerFormatter = option.headerFormatter;
+        this.contentFormatter = option.contentFormatter;
     }
+    inherit(ColumnTable, TableBase);
     extend(ColumnTable.prototype, {
-        constructor: ColumnTable,
-        rander: function (columns, rows, headerHeight, columnsWidthList, headerFormatter, contentFormatter) {
+        rander: function (dataSource) {
 
-            var tableHtml = ['<table class="' + this.tableClass + '">'],
+            var tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + this.width + 'px; height: ' + this.height + 'px;">'],
                 theadHtml = ['<thead class="' + this.theadClass + '">'],
-                tbodyHtml = ['<tbody class="' + this.tbodyClass + '">'];
-
-            columnsCount = columns.length;
+                tbodyHtml = ['<tbody class="' + this.tbodyClass + '">'],
+                columns = dataSource.columns,
+                rows = dataSource.rows;
 
             // build thead
-            theadHtml[theadHtml.length] = buildHeaderRows(columns, headerFormatter, headerHeight, columnsWidthList);
+            theadHtml[theadHtml.length] = buildHeaderRows(columns, this.headerFormatter, this.headerHeight, [this.width]);
             theadHtml[theadHtml.length] = '</thead>';
 
             // build tbody
-            tbodyHtml[tbodyHtml.length] = buildContentRows(rows, contentFormatter, columnsCount)
+            tbodyHtml[tbodyHtml.length] = buildContentRows(rows, this.contentFormatter, columns.length)
             tbodyHtml[tbodyHtml.length] = '</tbody>';
 
             // build table
@@ -829,8 +845,15 @@
             this.container.html(tableHtml.join(''));
             this.table = this.container.children('table');
         },
-        find: function (selector) {
-            return this.table.find(selector);
+        append: function (rows, columnCount) {
+            this.find('tbody:first').append(buildContentRows(rows, this.contentFormatter, columnCount));
+        },
+        resize: function (offset) {
+            // column
+            this.container.width(offset);
+            this.table.width(offset - freezeColumnContainerWidthOffset);
+            this.find('th').width(offset - freezeColumnContainerWidthOffset);
+            this.find('td').width(offset - freezeColumnContainerWidthOffset);
         }
     });
     // tables
@@ -885,10 +908,9 @@
                     resizebar.freezeWidth = resizebar.freezeWidth + offset;
 
                     resizebar.bar.css({ 'margin-left': resizebar.freezeWidth + resizeBarWidthOffset });
-                    console.log('freezeWidth : ' + resizebar.freezeWidth);
 
                     // complate
-                    if ($.isFunction(resizebar.complate)) {
+                    if (typeof (resizebar.complate) === 'function') {
                         resizebar.complate.call(resizebar, resizebar.freezeWidth);
                     }
                 }
@@ -933,105 +955,6 @@
     // ResizeBar ------------------------------- END
 
     // build table ------------------------------ GO
-
-    function randerFreezeCorner(dataSource, freezeColumnCount, formatter, styles) {
-        return randerHeader(dataSource, freezeColumnCount, formatter, styles);
-    }
-
-    function randerFreezeHeader(dataSource, formatter, styles) {
-        return randerHeader(dataSource, dataSource.columns.length, formatter, styles);
-    }
-
-    function randerHeader(dataSource, columnCount, formatter, styles/*{tableClass:'', theadClass:'', tbodyClass:''}*/) {
-        styles = extend({ tableClass: '', theadClass: '', tbodyClass: '' }, styles);
-        var columns = dataSource.columns,
-            i = 0,
-            len = Math.min(columnCount, columns.length),
-            tableHtml = ['<table class="' + styles.tableClass + '"><thead class="' + styles.theadClass + '"><tr>'];
-
-        if (!$.isFunction(formatter)) {
-            formatter = function (d) {
-                return d.displayValue;
-            };
-        }
-
-        for (; i < len; i++) {
-            tableHtml[tableHtml.length] = '<th data-sequence="' + i + '">' + formatter(columns[i]) + '</th>';
-        }
-
-        tableHtml[tableHtml.length] = '</tr></thead></table>';
-        return tableHtml.join('');
-    }
-
-    function randerFreezeColumnTable(dataSource, columnCount, headerCellFormatter, contentCellFormatter, styles) {
-        return randerTableByColumnCount(dataSource, columnCount, headerCellFormatter, contentCellFormatter, styles);
-    }
-
-    function randerFullTable(dataSource, headerCellFormatter, contentCellFormatter, styles) {
-        return randerTableByColumnCount(dataSource, dataSource.columns.length, headerCellFormatter, contentCellFormatter, styles);
-    }
-
-    function randerTableByColumnCount(dataSource, columnCount, headerCellFormatter, contentCellFormatter, styles/*{tableClasses:'', theadClasses:'', tbodyClasses:''}*/) {
-        styles = extend({ tableClass: '', theadClass: '', tbodyClass: '' }, styles);
-        var columns = dataSource.columns || [],
-            rows = dataSource.rows || [],
-            i = 0,
-            j = 0,
-            rowCount = rows.length,
-            tableHtml = ['<table class="' + styles.tableClass + '">'],
-            theadHtml = ['<thead class="' + styles.theadClass + '"><tr>'],
-            tbodyHtml = ['<tbody class="' + styles.tbodyClass + '">'];
-
-        columnCount = Math.min(columnCount, columns.length);
-
-        if (!$.isFunction(headerCellFormatter)) {
-            headerCellFormatter = function (d) {
-                return d.displayValue;
-            };
-        }
-
-        if (!$.isFunction(contentCellFormatter)) {
-            contentCellFormatter = function (d) {
-                var val = '&nbsp;';
-                if (d.displayValue != '') {
-                    val = d.displayValue;
-                }
-
-                if (d.hyperlink && d.hyperlink != '') {
-                    val = '<a href="' + d.hyperlink + '">' + val + '</a>';
-                }
-
-                return val;
-            };
-        }
-
-        // build thead
-        for (i = 0; i < columnCount; i++) {
-            theadHtml[theadHtml.length] = '<th data-sequence="' + i + '">' + headerCellFormatter(columns[i]) + '</th>';
-        }
-
-        theadHtml[theadHtml.length] = '</tr></thead>';
-
-        // build tbody
-        for (i = 0; i < rowCount; i++) {
-            var trows = ['<tr>'];
-            var row = rows[i];
-            for (j = 0; j < columnCount; j++) {
-                trows[trows.length] = '<td>' + contentCellFormatter(row[j]) + '</td>';
-            }
-            trows[trows.length] = '</tr>';
-            tbodyHtml[tbodyHtml.length] = trows.join('');
-        }
-
-        tbodyHtml[tbodyHtml.length] = '</tbody>';
-
-        // build table
-        tableHtml[tableHtml.length] = theadHtml.join('');
-        tableHtml[tableHtml.length] = tbodyHtml.join('');
-        tableHtml[tableHtml.length] = '</table>';
-
-        return tableHtml.join('');
-    }
 
     function buildHeaderRows(dataSource, formatter, height, columnsWidthList) {
         var i = 0,
