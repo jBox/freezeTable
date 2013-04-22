@@ -2,12 +2,11 @@
 // freezeTable
 (function ($, undefined) {
 
-    var tableContainerTemplate = '<div class="table-container" style="overflow: hidden; position: absolute; z-index: 4;"></div>',
+    var tablesContainerTemplate = '<div class="table-container" style="overflow: hidden; position: absolute; z-index: 4;"></div>',
         freezeCornerContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 3;"></div>',
         freezeColumnContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 2;"></div>',
         freezeHeaderContainerTemplate = '<div style="background-color: white; overflow: hidden; position: absolute; z-index: 1;"></div>',
         freezeFullContainerTemplate = '<div style="background-color: white; position: absolute; z-index: 0; overflow: auto;"></div>',
-        contentContainerTemplate = '<div style="background-color: white; position: absolute; z-index: 0; overflow: auto;"></div>',
         leftHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9; border-right: 2px solid #bdbdbd; -webkit-box-shadow: 5px 0 5px #DDD; box-shadow: 5px 0 5px #DDD;"><img src="images/Icon_Left.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
         rightHorizontalScrollBarTemplate = '<div class="horizontal-scroll-bar" style="width: 16px; position: absolute; z-index: 9;"><img src="images/Icon_Right.png" style="position: absolute; display: none; cursor: pointer;"/></div>',
         resizeBarTemplate = '<div class="freeze-column-resize-bar" style="border-left: 0px dashed #bdbdbd; width: 5px; cursor: col-resize; position: absolute; z-index: 10;"></div>',
@@ -24,7 +23,7 @@
         imageMarginMouseOffset = -10,
         primaryMouseButton = 1,
 
-        // 所以实例的Table将共用一个Tooltip
+        // only once Tooltip in all cases.
         tooltip = null;
 
     function extend(obj, ext) {
@@ -176,7 +175,7 @@
                 }
             },
 
-            // 增强横向 ScrollBar
+            // ScrollBar
             horizontalEnhanced: true,
 
             // paging.
@@ -193,11 +192,10 @@
                 theadClass: 'table-thead',
                 tbodyClass: 'table-tbody',
 
-                width: 1024,
-                height: 600
+                width: 1024, // auto, base on its parent's width.
+                height: 600  // auto, base on its parent's height.
             },
 
-            // 最小定义的数据集
             dataSource: {
                 columns: [],
                 rows: []
@@ -211,6 +209,7 @@
         delete option.container;
 
         extend(this, option);
+        this.mainContainerheightOffset = 0;
 
         // init. DOM            
         this.fullTable = undefined;
@@ -218,10 +217,8 @@
         this.headerTable = undefined;
         this.columnsTable = undefined;
 
-        this.contentContainer = $(contentContainerTemplate);
-        this.freezeHeaderContainer = $(freezeHeaderContainerTemplate);
-        this.freezeColumnContainer = $(freezeColumnContainerTemplate);
-        this.freezeCornerContainer = $(freezeCornerContainerTemplate);
+        this.tablesContainer = $(tablesContainerTemplate);
+        this.container.html(this.tablesContainer);
 
         tooltip = new Tooltip(this.tooltipTemplate || tooltipTemplate);
         this.mousemover = new Mousemover();
@@ -233,10 +230,52 @@
         constructor: FreezeTable,
 
         init: function () {
+            // first setup width & height
+            if (this.layout.width == 'auto') {
+                var parent = this.container.parent();
+                this.layout.width = parent.width() - 20;
+                if (this.layout.width < 800) {
+                    this.layout.width = 800;
+                }
+                (function (table) {
+                    $(window).bind('resize', function () {
+                        var resizeWidth = parent.width() - 20;
+                        if (resizeWidth < 800) {
+                            resizeWidth = 800;
+                        }
+                        
+                        table.width(resizeWidth);
+                    });
+                })(this);
+            }
+
+            if (this.layout.height == 'auto') {
+                this.layout.height = $('body').height() - 100;
+                if (this.layout.height < 400) {
+                    this.layout.height = 400;
+                }
+                (function (table) {
+                    $(window).bind('resize', function () {
+                        var resizeHeigth = $('body').height() - 100;
+                        if (resizeHeigth < 400) {
+                            resizeHeigth = 400;
+                        }
+                        console.log(resizeHeigth);
+                        table.height(resizeHeigth);
+                    });
+                })(this);
+            }
+
+            if (this.paging.enabled && this.paging.style == 'traditional') {
+                this.mainContainerheightOffset = 50;
+            }
+
             // setup table
-            this.container
-                .width(this.layout.width)
+            this.container.width(this.layout.width)
+                .height(this.layout.height + this.mainContainerheightOffset)
                 .css('overflow', 'hidden');
+
+            this.tablesContainer.width(this.layout.width).height(this.layout.height);
 
             var pagingIndex = 1;
             var dataSource = { columns: this.dataSource.columns, rows: this.dataSource.rows };
@@ -279,7 +318,7 @@
             fulltable.rander(dataSource);
             fulltable.container.width(this.layout.width).height(this.layout.height);
             this.fullTable = fulltable;
-            this.container.html(fulltable.container);
+            this.tablesContainer.html(fulltable.container);
             // 初始化 FullTable
 
             // 计算FullTable width & height
@@ -299,16 +338,15 @@
             var tableHeight = fulltable.table.height() + tableHeaderHeightOffset;
             var tableWidth = fulltable.table.width();
 
-            if (this.paging.enabled && this.paging.style == 'traditional') {
-                this.container.height(this.layout.height + 50);
-            } else {
-                this.container.height(this.layout.height);
-            }
-
             // 当内容不够宽时，放大内容宽度
             if (showWidth < this.layout.width - freezeWidth) {
                 tableWidth = Math.floor(tableWidth * (this.layout.width - freezeWidth) / showWidth);
                 fulltable.table.width(tableWidth);
+
+                columnWidthList.length = 0;
+                headerCells.each(function (index) {
+                    columnWidthList[columnWidthList.length] = $(this).width();
+                });
             }
 
             var headerHeight = headerCells.height() + tableHeaderHeightOffset;
@@ -332,7 +370,7 @@
                 headertable.rander(dataSource.columns);
 
                 this.headerTable = headertable;
-                this.container.append(headertable.container);
+                this.tablesContainer.append(headertable.container);
                 // 表头 -------------------------------------- end
 
                 // 当同时锁定表头与列时
@@ -363,7 +401,7 @@
                 columnstable.rander({ columns: dataSource.columns.slice(0, this.columns.freezedCount), rows: dataSource.rows });
 
                 this.columnsTable = columnstable;
-                this.container.append(columnstable.container);
+                this.tablesContainer.append(columnstable.container);
                 columnstable.container.width(freezeWidth);
                 // 列 -------------------------------------- end
 
@@ -390,6 +428,9 @@
 
                     this.container.append(leftHorizontalScrollBar);
                     this.container.append(rightHorizontalScrollBar);
+
+                    this.leftHorizontalScrollBar = leftHorizontalScrollBar;
+                    this.rightHorizontalScrollBar = rightHorizontalScrollBar;
 
                     // 绑定事件
                     (function (table) {
@@ -493,7 +534,7 @@
                 cornertable.rander(dataSource.columns.slice(0, this.columns.freezedCount));
 
                 this.cornerTable = cornertable;
-                this.container.append(cornertable.container);
+                this.tablesContainer.append(cornertable.container);
                 // 固定角 -------------------------------------- end
             }
 
@@ -703,6 +744,51 @@
             if (this.cornerTable) this.cornerTable.resize(offset);
             if (this.headerTable) this.headerTable.resize(offset, this.layout.width - offset);
             if (this.columnsTable) this.columnsTable.resize(offset);
+        },
+
+        width: function (width) {
+            this.layout.width = width;
+            this.container.width(width)
+            this.tablesContainer.width(width);
+            if (this.columns.freezed) {
+                var freezeWidth = this.resizeBar.freezeWidth || this.columns.defaultFreezedWidth;
+                this.fullTable.container.width(width - freezeWidth);
+                this.headerTable.container.width(width - freezeWidth);
+            } else {
+                this.fullTable.container.width(width);
+                this.headerTable.container.width(width);
+            }
+
+            if (this.rightHorizontalScrollBar) {
+                this.rightHorizontalScrollBar.css({ 'margin-left': width });
+            }
+        },
+
+        height: function (height) {
+            this.layout.height = height;
+            this.container.height(height + this.mainContainerheightOffset)
+            this.tablesContainer.height(height);
+
+            if (this.header.freezed) {
+                var headerHeight = this.fullTable.find('th').height();
+                this.columnsTable.container.height(height - headerHeight + freezeColumnContainerHeightOffset);
+                this.fullTable.container.height(height - headerHeight + freezeColumnContainerHeightOffset);
+            } else {
+                this.fullTable.container.width(height);
+                this.columnsTable.container.height(height);
+            }
+
+            if (this.leftHorizontalScrollBar) {
+                this.leftHorizontalScrollBar.height(height);
+            }
+
+            if (this.rightHorizontalScrollBar) {
+                this.rightHorizontalScrollBar.height(height);
+            }
+
+            if (this.resizeBar) {
+                this.resizeBar.height(height);
+            }
         }
     };
     // FreezeTable ------------------------------- END
@@ -798,7 +884,7 @@
     inherit(HeaderTable, TableBase);
     extend(HeaderTable.prototype, {
         rander: function (dataColumns) {
-            var tableHtml = ['<table class="' + this.tableClass + '" style="width: ' + this.width + 'px; height: ' + this.height + 'px;"><thead class="' + this.theadClass + '">'];
+            var tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + this.width + 'px; height: ' + this.height + 'px;"><thead class="' + this.theadClass + '">'];
             tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, this.formatter, this.height, this.columnWidthList);
             tableHtml[tableHtml.length] = '</thead></table>';
 
@@ -950,6 +1036,9 @@
             if ($.isFunction(callback)) {
                 this[name] = callback;
             }
+        },
+        height: function (height) {
+            this.bar.height(height);
         }
     };
     // ResizeBar ------------------------------- END

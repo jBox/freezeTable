@@ -1,0 +1,62 @@
+<html>
+<head>
+    <title>freezeTable example - auto size</title>
+    <link href="yahoo-answers-paging.css" rel="stylesheet" type="text/css" />
+    <link href="style-tableLayout.css" rel="stylesheet" type="text/css" />
+    <link href="style-basic-table.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+    <div>
+        <h1>auto</h1>
+        <div id="basicLayout">
+        </div>
+    </div>
+    <script src="data.js"></script>
+    <script src="jq.js"></script>
+    <script>window.jQuery || document.write(unescape('%3Cscript src="http://api.jquery.com/jquery-wp-content/themes/jquery/js/jquery-1.8.2.min.js"%3E%3C/script%3E'))</script>
+    <script src="jQuery.freezeTable.1.0.js"></script>
+    <script>
+        var basicFreezeTable = $('#basicLayout').freezeTable({
+            columns: {
+                freezed: true,
+                tooltip: { enabled: false }
+            },
+            header: {
+                freezed: true,
+                formatter: function (item) {
+                    var name = item.displayValue;
+                    var sortby = item.sortby;
+                    if (sortby && sortby != '') {
+                        return '<div class="' + sortby + '">' + name + '</div>';
+                    } else {
+                        return '<div>' + name + '</div>';
+                    }
+                },
+                click: function (item) {
+                    var source = basicFreezeTable.dataSource;
+                    for (var i = 0; i < source.columns.length; i++) {
+                        if (item == source.columns[i]) {
+                            if (item.sortby == 'asc') {
+                                item.sortby = 'desc';
+                            } else {
+                                item.sortby = 'asc';
+                            }
+                        } else {
+                            source.columns[i].sortby = '';
+                        }
+                    }
+                    var scrollleft = basicFreezeTable.fullTable.container.scrollLeft();
+                    basicFreezeTable.redraw(source);
+                    basicFreezeTable.fullTable.container.scrollLeft(scrollleft);
+                }
+            },
+            dataSource: globalData,
+            layout: {
+                width: 'auto',
+                height: 'auto'
+            }
+        });
+        $('#basicLayout').addClass('box-border');
+    </script>
+</body>
+</html>
