@@ -1,6 +1,6 @@
 .ks-pagination-links {
 font-size:90%;color:#333;font-family:Arial,Helvetica,sans-serif;
-position:relative;text-align:left;padding-top: 5px;color:rgb(128, 128, 128);margin-bottom:15px;line-height:140%;}
+position:relative;text-align:left;padding: 5px 12px;color:rgb(128, 128, 128);margin-bottom:15px;line-height:140%;}
 .ks-pagination-links ul {display:inline;padding-left:0px;margin-left:0px}
 .ks-pagination-links li {display:inline;list-style:none;text-align:center; margin:2px;}
 .ks-pagination-links li a {font-weight: 100;font-size: .8em!important;text-decoration: none!important; border: 1px #ccc solid;padding: 3px 6px 3px 6px!important;}

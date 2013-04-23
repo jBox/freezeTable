@@ -26,6 +26,12 @@
         // only once Tooltip in all cases.
         tooltip = null;
 
+    function object(obj) {
+        function F() { }
+        F.prototype = obj;
+        return new F();
+    }
+
     function extend(obj, ext) {
         if (!obj) {
             obj = {};
@@ -44,13 +50,6 @@
     }
 
     function inherit(sub, base) {
-
-        function object(obj) {
-            function F() { }
-            F.prototype = obj;
-            return new F();
-        }
-
         var prototype = object(base.prototype);
         prototype.constructor = sub;
         sub.prototype = prototype;
@@ -181,10 +180,17 @@
             // paging.
             paging: {
                 enabled: true,
-                style: 'listing', //ps: listing / traditional
+                style: 'listing', //ps: listing / pager
                 size: 500,
                 total: undefined,
-                listingLoading: undefined
+
+                pager: {
+                    index: 1,
+                    handler: undefined // handler for pager paging.
+                },
+                listing: {
+                    handler: undefined // loading for listing paging.
+                }
             },
 
             layout: {
@@ -218,7 +224,6 @@
         this.columnsTable = undefined;
 
         this.tablesContainer = $(tablesContainerTemplate);
-        this.container.html(this.tablesContainer);
 
         tooltip = new Tooltip(this.tooltipTemplate || tooltipTemplate);
         this.mousemover = new Mousemover();
@@ -230,6 +235,9 @@
         constructor: FreezeTable,
 
         init: function () {
+
+            this.container.html(this.tablesContainer);
+
             // first setup width & height
             if (this.layout.width == 'auto') {
                 var parent = this.container.parent();
@@ -243,7 +251,7 @@
                         if (resizeWidth < 800) {
                             resizeWidth = 800;
                         }
-                        
+
                         table.width(resizeWidth);
                     });
                 })(this);
@@ -266,7 +274,7 @@
                 })(this);
             }
 
-            if (this.paging.enabled && this.paging.style == 'traditional') {
+            if (this.paging.enabled && this.paging.style == 'pager') {
                 this.mainContainerheightOffset = 50;
             }
 
@@ -277,30 +285,49 @@
 
             this.tablesContainer.width(this.layout.width).height(this.layout.height);
 
-            var pagingIndex = 1;
+            var listingPagingIndex = 1;
             var dataSource = { columns: this.dataSource.columns, rows: this.dataSource.rows };
             if (this.paging.enabled) {
-                var start = pagingIndex - 1,
-                    end = this.paging.size;
 
-                dataSource.rows = this.dataSource.rows.slice(0, end);
-                // setup listingLoading handler
-                if (typeof (this.paging.listingLoading) !== 'function') {
-                    this.paging.listingLoading = function (index, size, total) {
+                switch (this.paging.style) {
+                    case 'listing':
+                        var start = listingPagingIndex - 1,
+                            end = this.paging.size;
 
-                        // add 10/9
-                        var s = Math.floor(Math.pow((10 / 9), (index - 2)) * size),
-                            e = Math.floor(Math.pow((10 / 9), (index - 1)) * size);
+                        dataSource.rows = this.dataSource.rows.slice(0, end);
+                        // setup  handler for listing
+                        if (typeof (this.paging.listing.handler) !== 'function') {
+                            this.paging.listing.handler = function (index, size, total) {
 
-                        if (e >= total) {
-                            return;
+                                // add 10/9
+                                var s = Math.floor(Math.pow((10 / 9), (index - 2)) * size),
+                                    e = Math.floor(Math.pow((10 / 9), (index - 1)) * size);
+
+                                if (e >= total) {
+                                    return;
+                                }
+
+                                var source = this.dataSource.rows.slice(s, e);
+                                this.fullTable.append(source);
+                                if (this.columnsTable) this.columnsTable.append(source, this.columns.freezeCount);
+                            };
                         }
+                        break;
 
-                        var source = this.dataSource.rows.slice(s, e);
-                        this.fullTable.append(source);
-                        if (this.columnsTable) this.columnsTable.append(source, this.columns.freezeCount);
-                    };
+                    case 'pager':
+                        var sPager = (this.paging.pager.index - 1) * this.paging.size,
+                            ePager = this.paging.pager.index * this.paging.size;
+
+                        dataSource.rows = this.dataSource.rows.slice(sPager, ePager);
+
+                        if (typeof (this.paging.pager.handler) !== 'function') {
+                            this.paging.pager.handler = function (index, size, total) {
+                                this.init();
+                            };
+                        }
+                        break;
                 }
+
             }
 
             var baseOption = {
@@ -524,18 +551,18 @@
             }
 
             if (this.header.freezed && this.columns.freezed) {
-                // 固定角 -------------------------------------- start
+                // Corner -------------------------------------- start
                 var cornertableOption = extend({
                     width: freezeWidth - freezeColumnContainerWidthOffset,
                     height: headerHeight,
-                    formatter: this.header.formatter,
+                    formatter: this.header.formatter
                 }, baseOption);
                 var cornertable = new CornerTable(cornertableOption);
                 cornertable.rander(dataSource.columns.slice(0, this.columns.freezedCount));
 
                 this.cornerTable = cornertable;
                 this.tablesContainer.append(cornertable.container);
-                // 固定角 -------------------------------------- end
+                // Corner -------------------------------------- end
             }
 
             // bind scroll event.
@@ -683,15 +710,13 @@
                                     $th = _th;
                                 } else {
                                     // not found
-                                    return false;
+                                    return;
                                 }
                             }
                         }
                         var index = parseInt($th.attr('data-sequence'));
                         table.header.click.call(table, table.dataSource.columns[index]);
                     } catch (ex) { /*ignore.*/ }
-
-                    return false;
                 }
 
                 if (table.header.click) {
@@ -718,16 +743,49 @@
                                         isListingLoading = true;
 
                                         try {
-                                            paging.listingLoading.call(table, ++pagingIndex, paging.size, paging.total);
+                                            paging.listing.handler.call(table, ++listingPagingIndex, paging.size, paging.total);
                                         } catch (ex) { /*ignore*/ }
                                         isListingLoading = false;
                                     }
                                 }
                             });
                             break;
-                        case 'traditional':
-                            var pager = $(buildPager(1, paging.size, paging.total)).css('margin-top', table.layout.height + 10);
+                        case 'pager':
+                            var pager = $(buildPager(paging.pager.index, paging.size, paging.total)).css('margin-top', table.layout.height + 10);
                             table.container.append(pager);
+                            pager.bind('click', function (event) {
+                                if (event.target.nodeName == 'A') {
+                                    var pagecount = Math.ceil(paging.total / paging.size),
+                                     a = event.target,
+                                     index = a.hash.replace('#page-', ''),
+                                         pager = paging.pager;
+
+                                    if (index == 'next') {
+                                        pager.index++;
+
+                                        if (pager.index > pagecount) {
+                                            pager.index = pagecount;
+                                            return;
+                                        }
+                                    } else if (index == 'previous') {
+                                        pager.index--;
+
+                                        if (pager.index < 1) {
+                                            pager.index = 1;
+                                            return;
+                                        }
+                                    } else {
+                                        index = parseInt(index);
+                                        if (index >= 1 && index <= pagecount) {
+                                            pager.index = index;
+                                        }
+                                    }
+
+                                    pager.handler.call(table, pager.index, paging.size, paging.total);
+
+                                    return false;
+                                }
+                            });
                             break;
                     }
                 }
@@ -1141,9 +1199,10 @@
 
         var times = Math.ceil(index / showSize),
             i = (times - 1) * showSize + 1,
-            end = times * showSize;
+            end = Math.min(times * showSize, pagecount);
 
-        if (times > 1) {
+        if (index > 1) {
+
             html[html.length] = '<li class="previous"><a href="#page-previous">&lt; Previous</a></li>';
         }
 
@@ -1156,7 +1215,7 @@
             }
         }
 
-        if (times * showSize < pagecount) {
+        if (index < pagecount) {
             html[html.length] = '<li class="next"><a href="#page-next">Next &gt;</a></li>';
         }
 

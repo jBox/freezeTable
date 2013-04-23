@@ -45,6 +45,15 @@ var freezeTable = $('#tableLayout').freezeTable({
         },
         freezed: true
     },
-    dataSource: globalData
+    dataSource: globalData,
+    paging: {
+        enabled: true,
+        style: 'pager', //ps: listing / pager
+        size: 100,
+        total: undefined,
+        pager: {
+            handler: null
+        }
+    }
 });
 $('#tableLayout').addClass('box-border');
