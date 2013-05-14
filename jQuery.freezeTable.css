@@ -1,0 +1,47 @@
+﻿.freezetable-tooltip
+{
+    background-color: #dfe0e4;
+    border: 1px solid #f90;
+    white-space: nowrap;
+    padding: 3px 5px;
+    font-size: 11px;
+}
+
+.columns-resize-line
+{
+    border-left: 2px dashed #bdbdbd;
+    width: 0px;
+}
+
+.freeze-column-resize-bar
+{
+    cursor: col-resize;
+}
+
+.horizontal-scroll-bar-left
+{
+    border-right: 2px solid #bdbdbd;
+    -webkit-box-shadow: 5px 0 5px #DDD;
+    box-shadow: 5px 0 5px #DDD;
+}
+
+    .horizontal-scroll-bar-left > .icon
+    {
+        background: url("Images/Icon_Left.png") no-repeat center center;
+    }
+
+.horizontal-scroll-bar-right > .icon
+{
+    background: url("Images/Icon_Right.png") no-repeat center center;
+}
+
+.table-container
+{
+    border: 1px solid #cccccc;
+}
+
+    .table-container td, .table-container td *
+    {
+        white-space: nowrap;
+        overflow: hidden;
+    }

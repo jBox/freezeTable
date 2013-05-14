@@ -12,6 +12,10 @@
 {
     border-collapse: collapse;
 }
+.table-container
+{
+    border: 1px solid #cccccc;
+}
 
 div.box-border
 {

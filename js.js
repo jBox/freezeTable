@@ -48,12 +48,12 @@ var freezeTable = $('#tableLayout').freezeTable({
     dataSource: globalData,
     paging: {
         enabled: true,
-        style: 'pager', //ps: listing / pager
+        style: 'listing', //ps: listing / pager
         size: 100,
-        total: undefined,
+
         pager: {
-            handler: null
+            index: 1
         }
     }
 });
-$('#tableLayout').addClass('box-border');
+$('.table-container').addClass('box-border');
