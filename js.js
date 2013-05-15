@@ -25,9 +25,9 @@ var freezeTable = $('#tableLayout').freezeTable({
                     source.columns[i].sortby = '';
                 }
             }
-            var scrollleft = freezeTable.fullTable.container.scrollLeft();
+            var scrollleft = freezeTable.tables['full'].container.scrollLeft();
             freezeTable.redraw(source);
-            freezeTable.fullTable.container.scrollLeft(scrollleft);
+            freezeTable.tables['full'].container.scrollLeft(scrollleft);
         }
     },
     columns: {
@@ -42,18 +42,15 @@ var freezeTable = $('#tableLayout').freezeTable({
             }
 
             return val;
-        },
-        freezed: true
+        }
     },
     dataSource: globalData,
     paging: {
         enabled: true,
         style: 'listing', //ps: listing / pager
-        size: 100,
 
         pager: {
             index: 1
         }
     }
 });
-$('.table-container').addClass('box-border');
