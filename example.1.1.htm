@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>freezeTable example</title>
+    <link href="jQuery.freezeTable.css" rel="stylesheet" type="text/css" />
+    <link href="yahoo-answers-paging.css" rel="stylesheet" type="text/css" />
+    <link href="style-tableLayout.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+    <div>
+        <div id="tableLayout">
+        </div>
+    </div>
+    <script type="text/javascript" src="data.js"></script>
+    <script type="text/javascript" src="jq.js"></script>
+    <script type="text/javascript" src="jQuery.freezeTable.1.1.js"></script>
+    <script type="text/javascript" src="jQuery.freezeTable.pagination.js"></script>
+    <script type="text/javascript">
+        var table = $('#tableLayout').freezeTable({
+            header: {
+                freezed: true,
+                formatter: function (item) {
+                    var name = item.displayValue;
+                    var sortby = item.sortby;
+                    if (sortby && sortby != '') {
+                        return '<div class="' + sortby + '">' + name + '</div>';
+                    } else {
+                        return '<div>' + name + '</div>';
+                    }
+                },
+                click: function (item, index) {
+                    var source = table.dataSource;
+                    for (var i = 0; i < source.columns.length; i++) {
+                        if (item == source.columns[i]) {
+                            if (item.sortby == 'asc') {
+                                item.sortby = 'desc';
+                            } else {
+                                item.sortby = 'asc';
+                            }
+                        } else {
+                            source.columns[i].sortby = '';
+                        }
+                    }
+                    var scrollleft = table.scrollLeft();
+                    table.redraw(source);
+                    table.scrollLeft(scrollleft);
+                }
+            },
+            columns: {
+                tooltip: {
+                    enabled: false
+                },
+                resizable: true,
+                frozenColumns: {
+                    resizable: true,
+                    count: 2,
+                    widths: [220, 100]
+                }
+            },
+            layout: {
+                stretch: 'fixed'
+            },
+            dataSource: globalData
+        });
+    </script>
+</body>
+</html>

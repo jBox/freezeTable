@@ -28,15 +28,15 @@
     .horizontal-scroll-bar-left > .icon
     {
         background: url("Images/Icon_Left.png") no-repeat center center;
-	width: 14px; 
-	height: 33px;
+        width: 14px;
+        height: 33px;
     }
 
 .horizontal-scroll-bar-right > .icon
 {
     background: url("Images/Icon_Right.png") no-repeat center center;
-	width: 14px; 
-	height: 33px;
+    width: 14px;
+    height: 33px;
 }
 
 .table-container

@@ -42,13 +42,24 @@ var freezeTable = $('#tableLayout').freezeTable({
             }
 
             return val;
+        },
+        click: function (r, c, p) {
+            console.log(p);
+            console.log(this.nodeName);
+        },
+        frozenColumns: {
+            count: 1,
+            widths: [260, 120]
         }
+    },
+    scrollbar: {
+        enhanced: true
     },
     dataSource: globalData,
     paging: {
         enabled: true,
         style: 'listing', //ps: listing / pager
-
+        size: 200,
         pager: {
             index: 1
         }

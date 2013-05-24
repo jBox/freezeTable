@@ -18,9 +18,7 @@
         tooltipTemplate = '<div class="freezetable-tooltip" style="position: absolute; z-index: 9999; display: none; "></div>';
 
     // global var.
-    var freezeCornerContainerWidthOffset = 1,
-        leftHorizontalScrollBarMarginOffset = -18,
-        rightHorizontalScrollBarMarginOffset = 0,
+    var leftHorizontalScrollBarMarginOffset = -18,
         imageMarginMouseOffset = -10,
         primaryMouseButton = 1,
 
@@ -56,6 +54,38 @@
         prototype.constructor = sub;
         sub.prototype = prototype;
     }
+
+    function EventModel() {
+        this.handlers = {};
+    }
+
+    EventModel.prototype = {
+        constructor: EventModel,
+        bind: function (event, callback, thisArg) {
+            if (typeof this.handlers[event] === 'undefined') {
+                this.handlers[event] = [];
+            }
+
+            this.handlers[event].push({ callback: callback, arg: thisArg });
+        },
+        trigger: function (event, obj) {
+            if (typeof this.handlers[event] === 'undefined') {
+                this.handlers[event] = [];
+            }
+
+            var handlers = this.handlers[event],
+                i = handlers.length - 1;
+
+            for (; i >= 0; i--) {
+                try {
+                    var h = handlers[i];
+                    h.callback.call(h.arg, this, obj);
+                } catch (ex) {
+                    console.log(ex);
+                }
+            }
+        }
+    };
 
     // mouse event ---------------------------------------- GO
 
@@ -167,7 +197,8 @@
             columns: {
                 resizable: true,
                 formatter: undefined,
-                click: undefined,
+                initWidth: 120,
+                click: undefined, // function(rowitem, cellitem, position){this is event target}
                 mouseover: undefined,
                 mouseleave: undefined,
                 tooltip: {
@@ -177,13 +208,13 @@
                 },
                 frozenColumns: {
                     /*
-                    * 冻结列的数量，>=0
+                    * frozen columns count，>=0
                     */
                     count: 1,
                     /*
-                    * 每列初始宽度, 初始值 [260] 数组
+                    * set up initial width for every frozen columns, def: [260]
                     */
-                    widths: [260], // 不能为空
+                    widths: [260], // not null
                     resizable: true,
                     tooltip: {
                         enabled: true,
@@ -208,7 +239,7 @@
 
                 pager: {
                     index: 1,
-                    wrapperClass: 'ks-pagination-links', // 启用pager是，生成HTML外层标签的CLASS
+                    wrapperClass: 'ks-pagination-links', // if setup pager, it use to build up HTML wrapper CLASS
                     handler: undefined // handler for pager paging.
                 },
                 listing: {
@@ -230,13 +261,13 @@
 
                 /*
                 * fixed | fill | portrait | landscape | extend
-                * fixed: 指定 width，height，忽略 minWidth，minHeight，maxWidth，maxHeight
-                * fill: 自动填充，minWidth，minHeight，maxWidth，maxHeight 生效，可以不指定 maxWidth，maxHeight
-                * portrait: 横向自动填充，minWidth，maxWidth 生效，可以不指定 maxWidth
-                * landscape: 纵向自动填充，minHeight，maxHeight 生效，可以不指定 maxHeight
-                * extend: 纵向展开，没有滚动条
+                * fixed: spec width，height，and it will ignore minWidth，minHeight，maxWidth，maxHeight
+                * fill: auto fill to the browser, minWidth, minHeight, maxWidth, maxHeight works，options: maxWidth，maxHeight
+                * landscape: landscape auto fill to the browser, minWidth, maxWidth works, options: maxWidth
+                * portrait: portrait auto fill to the browser, minHeight, maxHeight works, options: maxHeight
+                * extend: extend
                 */
-                stretch: 'fill'
+                stretch: 'fixed'
             },
 
             dataSource: {
@@ -261,11 +292,10 @@
         };
 
         this.eventHandlers = {};
-        
+
         tooltip = new Tooltip(this.tooltipTemplate || tooltipTemplate);
         this.mousemover = new Mousemover();
 
-        // 收集的列的点集合
         // [23, 34]
         this.points = [];
         this.availableRange = { x1: 0, x2: 2, y1: 0, y2: 0 };
@@ -274,7 +304,9 @@
         freezeTableInitializer.call(this);
     }
 
-    FreezeTable.prototype = {
+    inherit(FreezeTable, EventModel);
+
+    extend(FreezeTable.prototype, {
         constructor: FreezeTable,
 
         redraw: function (dataSource) {
@@ -289,83 +321,65 @@
             if (this.columnsTable) this.columnsTable.resize(offset);
         },
 
-        width: function(width) {
+        width: function (width) {
             var full = this.tables['full'],
                 header = this.tables['header'],
-                columns = this.tables['columns'];
+                columns = this.tables['columns'],
+                freezeWidth = 0;
 
             this.layout.width = width;
             this.container.width(width);
             this.container.children('.table-container').width(width);
 
-            if (this.columns.frozenColumns.count > 0) {
-                var freezeWidth = columns.container.width();
-                console.log('columns.container: '+ freezeWidth);
-                full.container.width(width - freezeWidth);
-                header.container.width(width - freezeWidth);
-            } else {
-                full.container.width(width);
-                header.container.width(width);
+            if (columns && this.columns.frozenColumns.count > 0) {
+                freezeWidth = columns.container.width();
             }
-            
+
+            var changedWidth = width - freezeWidth;
+            full.container.width(changedWidth);
+            header.container.width(changedWidth);
+
             var cOffset = this.container.offset();
             this.availableRange = {
                 x1: cOffset.left + 10,
-                x2: cOffset.left + this.layout.width - 5,
+                x2: cOffset.left + this.layout.width,
                 y1: cOffset.top + 5,
                 y2: cOffset.top + this.layout.height - 10
             };
-            
+
             this.refreshResizerInfos();
-            
-            if (typeof this.eventHandlers['sizechanged'] !== 'undefined') {
-                var h = this.eventHandlers['sizechanged'],
-                    i = 0;
-                for (i = h.length - 1; i >= 0; i--) {
-                    try {
-                        h[i].call(this, { width: width, height: this.layout.height });
-                    } catch (ex) {
-                    }
-                }
-            }
+            this.trigger('sizechanged', { width: width, height: this.layout.height });
         },
 
         height: function (height) {
             var full = this.tables['full'],
-                columns = this.tables['columns'];
+                columns = this.tables['columns'],
+                theadHeight = 0;
+
             this.layout.height = height;
             this.container.height(height);
             this.container.children('.table-container').height(height);
 
             if (this.header.freezed) {
-                var theadHeight = full.theadHeight();
-                columns.container.height(height - theadHeight);
-                full.container.height(height - theadHeight);
-            } else {
-                full.container.width(height);
-                columns.container.height(height);
+                theadHeight = full.theadHeight();
+            }
+
+            var changedHeight = height - theadHeight;
+            full.container.height(changedHeight);
+            if (columns) {
+                columns.container.height(changedHeight);
             }
 
             var cOffset = this.container.offset();
             this.availableRange = {
                 x1: cOffset.left + 10,
-                x2: cOffset.left + this.layout.width - 5,
+                x2: cOffset.left + this.layout.width,
                 y1: cOffset.top + 5,
                 y2: cOffset.top + this.layout.height - 10
             };
 
             this.refreshResizerInfos();
-
-            if (typeof this.eventHandlers['sizechanged'] !== 'undefined') {
-                var h = this.eventHandlers['sizechanged'],
-                    i = 0;
-                for (i = h.length - 1; i >= 0; i--) {
-                    try {
-                        h[i].call(this, { height: height, width: this.layout.width });
-                    } catch (ex) {
-                    }
-                }
-            }
+            this.trigger('sizechanged', { height: height, width: this.layout.width });
         },
 
         refreshResizerInfos: function () {
@@ -377,7 +391,6 @@
                     fullCells = fulltable.find('th'),
                     freezedCount = this.columns.frozenColumns.count;
 
-                // 内容表 每一列
                 fullCells.each(function (index) {
                     if (index > freezedCount) {
                         var left = $(fullCells[index]).offset().left;
@@ -386,7 +399,6 @@
                         }
                     }
                 });
-                // 内容表 最右边
                 var tableleft = fulltable.table.offset().left + fulltable.table.width();
                 if (tableleft <= available.x2 && tableleft >= available.x1) {
                     points[points.length] = tableleft;
@@ -397,9 +409,8 @@
                 var columnstable = this.tables['columns'],
                     columnsCells = columnstable.find('th');
 
-                // 冻结表 每一列      
                 columnsCells.each(function (index) {
-                    if (index > 1) {
+                    if (index >= 1) {
                         var left = $(columnsCells[index]).offset().left;
                         if (left <= available.x2 && left >= available.x1) {
                             points[points.length] = left;
@@ -407,7 +418,6 @@
                     }
                 });
 
-                // 冻结表 最右边
                 var columnsleft = columnstable.table.offset().left + columnstable.table.width();
                 if (columnsleft <= available.x2 && columnsleft >= available.x1) {
                     points[points.length] = columnsleft;
@@ -416,19 +426,8 @@
 
             this.columnsResizer.height = this.layout.height;
             this.columnsResizer.reset(points);
-        },
-        
-        bind: function (event, callback) {
-            var handlers = this.eventHandlers;
-            if (typeof handlers[event] === 'undefined') {
-                handlers[event] = [];
-            }
-
-            if (typeof callback === 'function') {
-                handlers[event].push(callback);
-            }
         }
-    };
+    });
 
     function freezeTableInitializer() {
         // fisrt of all.
@@ -481,6 +480,8 @@
                     break;
 
                 case 'pager':
+                    this.container.height(this.container.height() + 50);
+
                     var sPager = (this.paging.pager.index - 1) * this.paging.size,
                         ePager = this.paging.pager.index * this.paging.size;
 
@@ -488,7 +489,7 @@
 
                     if (typeof (this.paging.pager.handler) !== 'function') {
                         this.paging.pager.handler = function (index, size, total) {
-                            this.init();
+                            this.redraw();
                         };
                     }
                     break;
@@ -548,11 +549,21 @@
                 dataSource,
                 this.layout,
                 this.header,
+                this.columns,
                 tablesContainer,
                 headerHeight,
-                freezeWidth,
-                this.columns.frozenColumns.count);
+                freezeWidth);
         }
+
+        this.margintop = {
+            top: full.theadHeight(),
+            offset: 0
+        };
+
+        this.marginleft = {
+            left: freezeWidth,
+            offset: 0
+        };
 
         // horizontal - enhanced
         if (this.scrollbar.enhanced) {
@@ -564,12 +575,11 @@
                 isRightBarVisiable = false;
 
             leftHorizontalScrollBar.css({ 'margin-left': freezeWidth + leftHorizontalScrollBarMarginOffset, 'height': this.layout.height });
-            rightHorizontalScrollBar.css({ 'margin-left': this.layout.width + rightHorizontalScrollBarMarginOffset, 'height': this.layout.height });
+            rightHorizontalScrollBar.css({ 'margin-left': this.layout.width, 'height': this.layout.height });
 
             this.container.append(leftHorizontalScrollBar);
             this.container.append(rightHorizontalScrollBar);
 
-            // 绑定事件
             (function (table) {
                 leftHorizontalScrollBar
                     .unbind('mouseover')
@@ -637,7 +647,7 @@
 
                 table.bind('sizechanged', function (szie) {
                     leftHorizontalScrollBar.css({ 'height': szie.height });
-                    rightHorizontalScrollBar.css({ 'margin-left': szie.width + rightHorizontalScrollBarMarginOffset, 'height': szie.height });
+                    rightHorizontalScrollBar.css({ 'margin-left': szie.width, 'height': szie.height });
                 });
             })(this);
 
@@ -648,9 +658,11 @@
                 this.show();
             }, leftHorizontalScrollBar);
 
-            this.tables['columns'].bind('sizechanged', function (size) {
-                leftHorizontalScrollBar.css({ 'margin-left': size.width + leftHorizontalScrollBarMarginOffset });
-            });
+            if (this.tables['columns']) {
+                this.tables['columns'].bind('sizechanged', function (size) {
+                    leftHorizontalScrollBar.css({ 'margin-left': size.width + leftHorizontalScrollBarMarginOffset });
+                });
+            }
         }
 
         // ...tooltipHandler and pager
@@ -709,36 +721,6 @@
                     });
             }
 
-            function headerClickHandler(event) {
-                try {
-                    // find data-sequence
-                    var $th = $(event.target);
-                    if (event.target.nodeName != 'TH') {
-                        var _th = $th.parents('th:first');
-                        if (_th.length != 0) {
-                            $th = _th;
-                        } else {
-                            _th = $th.find('th:first');
-                            if (_th.length != 0) {
-                                $th = _th;
-                            } else {
-                                // not found
-                                return;
-                            }
-                        }
-                    }
-                    var index = parseInt($th.attr('data-sequence'));
-                    table.header.click.call(table, table.dataSource.columns[index]);
-                } catch (ex) { /*ignore.*/ }
-            }
-
-            if (table.header.click) {
-                fullContainer.unbind('click').bind('click', headerClickHandler);
-                if (headerContainer) headerContainer.unbind('click').bind('click', headerClickHandler);
-                if (columnsContainer) columnsContainer.unbind('click').bind('click', headerClickHandler);
-                if (cornerContainer) cornerContainer.unbind('click').bind('click', headerClickHandler);
-            }
-
             if (table.paging.enabled) {
                 table.paging.total = table.paging.total || table.dataSource.rows.length;
                 var paging = table.paging,
@@ -765,7 +747,7 @@
                         break;
 
                     case 'pager':
-                        var pager = $(buildPager(paging.pager.index, paging.size, paging.total)).css('margin-top', table.layout.height + 10);
+                        var pager = $(buildPager(paging.pager.index, paging.size, paging.total, paging.pager.wrapperClass));
                         table.container.append(pager);
                         pager.bind('click', function (event) {
                             if (event.target.nodeName == 'A') {
@@ -809,11 +791,13 @@
         var cOffset = this.container.offset();
         this.availableRange = {
             x1: cOffset.left + 10,
-            x2: cOffset.left + this.layout.width - 5,
+            x2: cOffset.left + this.layout.width,
             y1: cOffset.top + 5,
             y2: cOffset.top + this.layout.height - 10
         };
         this.refreshResizerInfos();
+
+        initailizeClickEventsHandler(this);
 
         // bind scroll event.
         var scroller = new Scroller(full.container);
@@ -839,7 +823,6 @@
             var i = 0,
                 len = reiszehandlers.length;
             for (i = 0; i < len; i++) {
-                // 检查到第一个能处理的table就停止
                 if (reiszehandlers[i].handleColumnsResized(position, this)) {
                     break;
                 }
@@ -865,7 +848,6 @@
             } else if (typeof layout.maxHeight === 'number' && resizeHeight > layout.maxHeight) {
                 resizeHeight = layout.maxHeight;
             }
-            console.log('HresizeHeighteight: ' + resizeHeight);
             return resizeHeight;
         }
 
@@ -878,7 +860,6 @@
                 resizeWidth = layout.maxWidth;
             }
 
-            console.log('resizeWidth: ' + resizeWidth);
             return resizeWidth;
         }
 
@@ -902,12 +883,16 @@
             tableClass: layout.tableClass,
             theadClass: layout.theadClass,
             tbodyClass: layout.tbodyClass,
+            initWidth: columns.initWidth,
+            layoutWidth: layout.width,
+            frozenCount: columns.frozenColumns.count,
+            frozenWidths: columns.frozenColumns.widths,
             headerFormatter: header.formatter,
             contentFormatter: columns.formatter
         };
 
         var full = new FullTable(fulltableOption);
-        full.rander(dataSource, columns.resizable);
+        full.render(dataSource, columns.resizable);
         full.container
             .width(layout.width)
             .height(layout.height);
@@ -920,7 +905,7 @@
         var headerHeight = cells.height();
         cells.height(headerHeight);
 
-        // TODO: 当内容不够宽时，放大内容宽度 !!
+        // TODO: not enough content !!
 
         return { full: full, headercells: cells, headerHeight: headerHeight };
     }
@@ -952,11 +937,9 @@
             };
 
         var headert = new HeaderTable(headertableOption);
-        headert.rander(dataSource.columns);
+        headert.render(dataSource.columns);
         tablesContainer.append(headert.container);
 
-
-        // 当同时锁定表头与列时
         if (columns.frozenColumns.count > 0) {
             var fullcellswidth = full.thCellsWidth(),
                 thswidth = 0;
@@ -1002,12 +985,29 @@
         };
 
         var columnstable = new ColumnsTable(columnstableOption);
-        columnstable.rander({ columns: dataSource.columns.slice(0, count), rows: dataSource.rows });
+        columnstable.render({ columns: dataSource.columns.slice(0, count), rows: dataSource.rows });
 
         tablesContainer.append(columnstable.container);
         columnstable.container.width(freezeWidth);
 
-        // 当同时锁定表头与列时
+        // set up columns width
+        if (count > 1 && columns.frozenColumns.widths.length > 1) {
+            var ws = columns.frozenColumns.widths,
+                columnHeaders = columnstable.find('th'),
+                baseWidth = 0,
+                len = columnHeaders.length;
+
+            for (i = 0; i < len; i++) {
+                baseWidth += $(columnHeaders[i]).width();
+            }
+
+            len = ws.length;
+            var times = baseWidth / freezeWidth;
+            for (i = 0; i < len; i++) {
+                $(columnHeaders[i]).width(ws[i] * times);
+            }
+        }
+
         if (header.freezed) {
             var theadheight = full.theadHeight();
             columnstable.container.css('margin-top', theadheight)
@@ -1020,7 +1020,7 @@
         return columnstable;
     }
 
-    function initializeCornerTable(dataSource, layout, header, tablesContainer, headerHeight, freezeWidth, frozenColumnsCount) {
+    function initializeCornerTable(dataSource, layout, header, columns, tablesContainer, headerHeight, freezeWidth) {
         var cornertableOption = {
             tableClass: layout.tableClass,
             theadClass: layout.theadClass,
@@ -1030,11 +1030,104 @@
             formatter: header.formatter
         };
 
-        var corner = new CornerTable(cornertableOption);
-        corner.rander(dataSource.columns.slice(0, frozenColumnsCount));
+        var corner = new CornerTable(cornertableOption),
+            frozenColumnsCount = columns.frozenColumns.count;
+        corner.render(dataSource.columns.slice(0, frozenColumnsCount));
         tablesContainer.append(corner.container);
 
+        // set up columns width
+        if (frozenColumnsCount > 1 && columns.frozenColumns.widths.length > 1) {
+            var ws = columns.frozenColumns.widths,
+                cornerHeaders = corner.find('th'),
+                baseWidth = 0,
+                len = cornerHeaders.length,
+                i = 0;
+
+            for (i = 0; i < len; i++) {
+                baseWidth += $(cornerHeaders[i]).width();
+            }
+
+            len = ws.length;
+            var times = baseWidth / freezeWidth;
+            for (i = 0; i < len; i++) {
+                $(cornerHeaders[i]).width(ws[i] * times);
+            }
+        }
+
         return corner;
+    }
+
+    function initailizeClickEventsHandler(table) {
+        function headerClickHandler(event) {
+            try {
+                // find data-sequence
+                var $th = $(event.target);
+                if (event.target.nodeName != 'TH') {
+                    var pth = $th.parents('th:first');
+                    if (pth.length != 0) {
+                        $th = pth;
+                    } else {
+                        // not found
+                        $th = undefined;
+                    }
+                }
+
+                if ($th) {
+                    var index = parseInt($th.attr('data-sequence'));
+                    table.header.click.call(table, table.dataSource.columns[index]);
+
+                    return false;
+                }
+            } catch (ex) { /*ignore.*/ }
+
+            return true;
+        }
+
+        function contentClickHandler(event) {
+            try {
+                // find data-sequence
+                var $td = $(event.target);
+                if (event.target.nodeName != 'TD') {
+                    var ptd = $td.parents('td:first');
+                    if (ptd.length != 0) {
+                        $td = ptd;
+                    } else {
+                        // not found
+                        $td = undefined;
+                    }
+                }
+
+                if ($td) {
+                    var pstr = $td.attr('pos'),
+                        pos = pstr.split(',');
+                    if (pos.length == 2) {
+                        var row = table.dataSource.rows[pos[0]],
+                            cell = row[pos[1]];
+
+                        return table.columns.click.call(event.target, row, cell, pstr);
+                    }
+                }
+            } catch (ex) { /*ignore.*/ }
+
+            return true;
+        }
+
+        var full = table.tables['full'],
+            columns = table.tables['columns'],
+            header = table.tables['header'],
+            corner = table.tables['corner'];
+
+        if (typeof table.header.click === 'function') {
+            full.container.unbind('click').bind('click', headerClickHandler);
+            if (header) header.container.unbind('click').bind('click', headerClickHandler);
+            if (columns) columns.container.unbind('click').bind('click', headerClickHandler);
+            if (corner) corner.container.unbind('click').bind('click', headerClickHandler);
+        }
+
+        if (typeof table.columns.click === 'function') {
+            full.container.unbind('click').bind('click', contentClickHandler);
+            if (columns) columns.container.unbind('click').bind('click', contentClickHandler);
+        }
     }
 
     /*
@@ -1108,7 +1201,7 @@
 
     function Pagination(freezetable) {
     }
-    
+
     Pagination.prototype = {
         constructor: Pagination,
         getDataSource: function (index) {
@@ -1141,7 +1234,6 @@
                             var hb = handlers['horizontal-bar'][i];
                             hb.callback.call(hb.arg, scroller.left);
                         } catch (ex) {
-                            console.log(ex);
                         }
                     }
                 } else if (scroller.top != bar.scrollTop()) {
@@ -1151,7 +1243,6 @@
                             var vb = handlers['vertical-bar'][i];
                             vb.callback.call(vb.arg, scroller.top);
                         } catch (ex) {
-                            console.log(ex);
                         }
                     }
                 }
@@ -1202,13 +1293,13 @@
             return this.find('thead').height();
         },
         /*
-        * 返回表头单元格实际宽度
+        * gets th real width
         */
         thCellsWidth: function () {
             var widths = [0],
                 realwidths = [],
                 i = 0,
-                len =0;
+                len = 0;
             if (this.table) {
                 var cells = this.find('th');
                 cells.each(function (index, value) {
@@ -1254,11 +1345,17 @@
         TableBase.call(this, option);
         this.headerFormatter = option.headerFormatter;
         this.contentFormatter = option.contentFormatter;
+        this.initWidth = option.initWidth;
+        this.layoutWidth = option.layoutWidth;
+        this.frozenCount = option.frozenCount;
+        this.frozenWidths = option.frozenWidths;
     }
     inherit(FullTable, TableBase);
     extend(FullTable.prototype, {
-        rander: function (dataSource, columnsResizable) {
-            var columns = dataSource.columns || [],
+        render: function (dataSource, columnsResizable) {
+            var initWidth = this.initWidth,
+                layoutWidth = this.layoutWidth,
+                columns = dataSource.columns || [],
                 rows = dataSource.rows || [],
                 tableHtml = ['<table class="' + this.tableClass + '">'],
                 theadHtml = ['<thead class="' + this.theadClass + '">'],
@@ -1266,12 +1363,24 @@
 
             if (columnsResizable) {
                 // cal width.
-                var totalWidth = 0,
-                    i = 0;
-                for (i = columns.length - 1; i >= 0; i--) {
-                    // TODO: settings 120.
-                    totalWidth += 120;
+                var totalWidth = initWidth * columns.length,
+                    mainWidth = initWidth * (columns.length - this.frozenCount),
+                    i = 0,
+                    fwidths = 0;
+
+                for (i = 0; i < this.frozenCount; i++) {
+                    if (this.frozenWidths[i]) {
+                        fwidths += this.frozenWidths[i];
+                    } else {
+                        fwidths += this.frozenWidths[0];
+                    }
                 }
+
+                if (mainWidth < (layoutWidth - fwidths)) {
+                    initWidth = Math.floor((layoutWidth - fwidths) / (columns.length - this.frozenCount));
+                    totalWidth = initWidth * columns.length;
+                }
+
                 /*importent!*/
                 tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + totalWidth + 'px;">'];
             }
@@ -1295,33 +1404,28 @@
         append: function (rows) {
             this.find('tbody:first').append(buildContentRows(rows, this.contentFormatter));
         },
-        resize: function (offset, viewWidth) {
-            this.container.css('margin-left', offset).width(viewWidth);
-        },
         /*
         * position: {start : 0, offset : 0}
         * freezetable: table
         */
         handleColumnsResized: function (position/*{start, offset}*/, freezetable) {
-            // 找到谁被拖动了.
             var fulltable = this.table,
                 selected = undefined,
                 cells = this.find('th'),
                 i = 0,
                 len = cells.length;
 
-            // 判断是否表的最右边
             var tableleft = fulltable.offset().left + fulltable.width();
             if (position.start <= tableleft + 10 && position.start >= tableleft - 10) {
-                selected = cells.last(); // 表示最后一个被拖
+                selected = cells.last(); // 
             } else {
-                // 判断其他列
+                // others
                 for (i = freezetable.columns.frozenColumns.count; i < len; i++) {
                     var c = $(cells[i]),
                         left = c.offset().left;
 
                     if (position.start <= left + 10 && position.start >= left - 10) {
-                        selected = $(cells[i - 1]); // 表示前一个格子被拖动了
+                        selected = $(cells[i - 1]); // 
                         break;
                     }
                 }
@@ -1359,7 +1463,7 @@
     }
     inherit(CornerTable, TableBase);
     extend(CornerTable.prototype, {
-        rander: function (dataColumns) {
+        render: function (dataColumns) {
             var tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + this.width + 'px; height: ' + this.height + 'px;"><thead class="' + this.theadClass + '">'];
             tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, this.formatter, this.height);
             tableHtml[tableHtml.length] = '</thead></table>';
@@ -1369,7 +1473,7 @@
         },
         resize: function (offset) {
             // corner
-            var cornerWidth = offset + freezeCornerContainerWidthOffset;
+            var cornerWidth = offset;
             this.container.width(cornerWidth);
             this.find('th').width(cornerWidth);
         }
@@ -1384,7 +1488,7 @@
     }
     inherit(HeaderTable, TableBase);
     extend(HeaderTable.prototype, {
-        rander: function (dataColumns) {
+        render: function (dataColumns) {
             var tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + this.width + 'px; height: ' + this.height + 'px;"><thead class="' + this.theadClass + '">'];
             tableHtml[tableHtml.length] = buildHeaderRows(dataColumns, this.formatter, this.height, this.columnsWidth);
             tableHtml[tableHtml.length] = '</thead></table>';
@@ -1408,7 +1512,7 @@
     }
     inherit(ColumnsTable, TableBase);
     extend(ColumnsTable.prototype, {
-        rander: function (dataSource) {
+        render: function (dataSource) {
 
             var tableHtml = ['<table class="' + this.tableClass + '" style="table-layout: fixed; width: ' + this.width + 'px; height: ' + this.height + 'px;">'],
                 theadHtml = ['<thead class="' + this.theadClass + '">'],
@@ -1447,25 +1551,22 @@
         * freezetable: table
         */
         handleColumnsResized: function (position/*{start, offset}*/, freezetable) {
-            // 找到谁被拖动了.
             var columnstable = this.table,
                 selected = undefined,
                 cells = this.find('th'),
                 i = 0,
                 len = cells.length;
 
-            // 判断是否表的最右边
             var tableleft = columnstable.offset().left + columnstable.width();
             if (position.start <= tableleft + 10 && position.start >= tableleft - 10) {
-                selected = cells.last(); // 表示最后一个被拖
+                selected = cells.last(); // 
             } else {
-                // 判断其他列
-                for (i = freezetable.columns.frozenColumns.count; i < len; i++) {
+                for (i = 1; i < len; i++) {
                     var c = $(cells[i]),
                         left = c.offset().left;
 
                     if (position.start <= left + 10 && position.start >= left - 10) {
-                        selected = $(cells[i - 1]); // 表示前一个格子被拖动了
+                        selected = $(cells[i - 1]); // 
                         break;
                     }
                 }
@@ -1597,7 +1698,6 @@
                         try {
                             h.callback.call(h.scope, arg);
                         } catch (ex) {
-                            console.log(ex);
                         }
                     }
                 }
@@ -1764,7 +1864,7 @@
             var trHtml = ['<tr>'];
             var row = rows[i];
             for (j = 0; j < columnsCount; j++) {
-                trHtml[trHtml.length] = '<td>' + formatter(row[j]) + '</td>';
+                trHtml[trHtml.length] = '<td pos="' + i + ',' + j + '">' + formatter(row[j]) + '</td>';
             }
             trHtml[trHtml.length] = '</tr>';
             html[html.length] = trHtml.join('');
@@ -1778,7 +1878,7 @@
 
         var showSize = 7,
             pagecount = Math.ceil(total / size),
-            html = ['<div class="' + styleClasses + '"><ul>'];
+            html = ['<div class="' + styleClasses + '" style="position: absolute;"><ul>'];
 
         var times = Math.ceil(index / showSize),
             i = (times - 1) * showSize + 1,
